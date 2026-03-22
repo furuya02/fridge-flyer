@@ -125,6 +125,32 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
+# AWS CDK
+cdk.out/
+.cdk.staging/
+cdk.context.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
 # yarn v3
 .pnp.*
 .yarn/*
@@ -137,3 +163,7 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+tmp/
+.claude
+CLAUDE.md
