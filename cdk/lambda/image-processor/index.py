@@ -1,10 +1,9 @@
 """
 画像処理Lambda（Bedrock Flow Lambdaノード用）
-S3から固定パスの画像を取得し、Bedrockで画像の説明を生成する
+S3から画像を取得し、Bedrockで画像の内容を分析する
 """
 import json
 import os
-import base64
 import boto3
 from typing import Any
 
@@ -30,23 +29,59 @@ def get_image_media_type(key: str) -> str:
         return "image/jpeg"
 
 
-def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+def get_prompt_for_image(key: str) -> str:
     """
-    Bedrock Flowから呼び出され、S3から固定パスの画像を取得してLLMで説明を生成する
+    画像の種類に応じたプロンプトを取得する
 
     Args:
-        event: Bedrock Flowからの入力
+        key: S3オブジェクトキー
+
+    Returns:
+        分析用プロンプト
+    """
+    key_lower = key.lower()
+
+    if "fridge" in key_lower:
+        # 冷蔵庫の中身を分析
+        return """画像に映っている冷蔵庫の中身を【すべて漏れなく】一覧してください。省略せず、画像に見えるすべての食材・飲料を列挙してください。
+
+各アイテムについて以下の情報を記載：
+1. 品名
+2. 数量（わかる場合）
+3. 状態（新鮮、開封済み、など - わかる場合）
+
+※一部だけでなく、必ずすべてのアイテムを出力してください。"""
+
+    else:
+        # チラシの商品を分析（デフォルト）
+        return """画像に映っている商品を【すべて漏れなく】一覧してください。省略せず、画像に見えるすべての商品を列挙してください。
+
+各商品について以下の情報を記載：
+1. 商品名
+2. 単位（個、パックなど）
+3. 価格（税込み）
+4. 価格（税抜き）
+
+※一部だけでなく、必ずすべての商品を出力してください。"""
+
+
+def handler(event: dict[str, Any], context: Any) -> str:
+    """
+    Bedrock Flowから呼び出され、S3から画像を取得してLLMで分析する
+
+    Args:
+        event: Bedrock Flowからの入力（無視、環境変数のSOURCE_KEYを使用）
         context: Lambdaコンテキスト
 
     Returns:
-        画像の説明を含むレスポンス
+        画像の分析結果（文字列）
     """
     print(f"Received event: {json.dumps(event)}")
 
     s3_client = boto3.client("s3")
     bedrock_runtime = boto3.client("bedrock-runtime")
 
-    # 環境変数から固定パスを取得
+    # 環境変数から設定を取得
     bucket = os.environ["SOURCE_BUCKET"]
     key = os.environ["SOURCE_KEY"]
     output_bucket = os.environ["OUTPUT_BUCKET"]
@@ -62,13 +97,13 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         print(f"Image loaded: {len(image_data)} bytes, media_type: {media_type}")
     except Exception as e:
         print(f"Error fetching image from S3: {str(e)}")
-        return {
-            "error": f"Failed to fetch image: {str(e)}",
-            "bucket": bucket,
-            "key": key
-        }
+        return f"Error: Failed to fetch image: {str(e)}"
 
-    # Bedrockで画像の説明を生成
+    # 画像の種類に応じたプロンプトを取得
+    prompt = get_prompt_for_image(key)
+    print(f"Using prompt for: {key}")
+
+    # Bedrockで画像の内容を分析
     try:
         response = bedrock_runtime.converse(
             modelId=model_id,
@@ -85,15 +120,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                             }
                         },
                         {
-                            "text": """画像に映っている商品を【すべて漏れなく】一覧してください。省略せず、画像に見えるすべての商品を列挙してください。
-
-各商品について以下の情報を記載：
-1. 商品名
-2. 単位（個、パックなど）
-3. 価格（税込み）
-4. 価格（税抜き）
-
-※一部だけでなく、必ずすべての商品を出力してください。"""
+                            "text": prompt
                         }
                     ]
                 }
@@ -125,7 +152,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         print(f"Result saved to s3://{output_bucket}/{output_key}")
 
-        # Flow出力用に説明文を返す
+        # 分析結果の文字列を返す
         return description
 
     except Exception as e:

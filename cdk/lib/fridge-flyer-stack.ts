@@ -16,7 +16,7 @@ export class FridgeFlyerStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // 画像処理Lambda用のIAMロール
+    // 画像処理Lambda用のIAMロール（共通）
     const imageProcessorRole = new iam.Role(this, 'ImageProcessorRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
@@ -36,9 +36,9 @@ export class FridgeFlyerStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    // 画像処理Lambda（Flowノード用）
-    const imageProcessorLambda = new lambda.Function(this, 'ImageProcessorLambda', {
-      functionName: 'fridge-flyer-image-processor',
+    // チラシ処理Lambda（flyer.jpg用）
+    const flyerProcessorLambda = new lambda.Function(this, 'FlyerProcessorLambda', {
+      functionName: 'fridge-flyer-flyer-processor',
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda/image-processor'),
@@ -53,6 +53,23 @@ export class FridgeFlyerStack extends cdk.Stack {
       },
     });
 
+    // 冷蔵庫処理Lambda（fridge.jpg用）
+    const fridgeProcessorLambda = new lambda.Function(this, 'FridgeProcessorLambda', {
+      functionName: 'fridge-flyer-fridge-processor',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambda/image-processor'),
+      role: imageProcessorRole,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 1024,
+      environment: {
+        SOURCE_BUCKET: bucket.bucketName,
+        SOURCE_KEY: 'fridge.jpg',
+        OUTPUT_BUCKET: bucket.bucketName,
+        MODEL_ID: 'global.anthropic.claude-opus-4-6-v1',
+      },
+    });
+
     // Bedrock Flow用のIAMロール
     const flowRole = new iam.Role(this, 'BedrockFlowRole', {
       assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
@@ -61,7 +78,10 @@ export class FridgeFlyerStack extends cdk.Stack {
     // FlowからLambdaを呼び出す権限
     flowRole.addToPolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'],
-      resources: [imageProcessorLambda.functionArn],
+      resources: [
+        flyerProcessorLambda.functionArn,
+        fridgeProcessorLambda.functionArn,
+      ],
     }));
 
     // FlowからBedrockモデルを呼び出す権限
@@ -70,12 +90,73 @@ export class FridgeFlyerStack extends cdk.Stack {
       resources: ['*'],
     }));
 
+    // レシピ生成用プロンプトテンプレート
+    const recipePromptTemplate = `あなたは料理の専門家です。以下の情報をもとに、レシピを3種類提案してください。
+
+## 冷蔵庫の中身
+{{fridge_contents}}
+
+## スーパーのチラシ（特売品）
+{{flyer_contents}}
+
+## 条件
+- 冷蔵庫にある食材を中心に使用してください
+- スーパーで1〜2品買い足せば作れるレシピを提案してください
+- 料理2品とデザート1品を提案してください
+
+## 出力形式
+以下の形式で3つのレシピを提案してください：
+
+### 料理1: [料理名]
+**紹介**: [この料理の簡単な紹介]
+**材料**:
+- [材料1]
+- [材料2]
+...
+**レシピ**:
+1. [手順1]
+2. [手順2]
+...
+**買い物リスト**:
+- [買う必要がある食材1]
+- [買う必要がある食材2]
+
+### 料理2: [料理名]
+**紹介**: [この料理の簡単な紹介]
+**材料**:
+- [材料1]
+- [材料2]
+...
+**レシピ**:
+1. [手順1]
+2. [手順2]
+...
+**買い物リスト**:
+- [買う必要がある食材1]
+- [買う必要がある食材2]
+
+### デザート: [デザート名]
+**紹介**: [このデザートの簡単な紹介]
+**材料**:
+- [材料1]
+- [材料2]
+...
+**レシピ**:
+1. [手順1]
+2. [手順2]
+...
+**買い物リスト**:
+- [買う必要がある食材1]
+- [買う必要がある食材2]`;
+
     // Bedrock Flow定義
+    // Input → [FlyerLambda, FridgeLambda] → Prompt → Output
     const flow = new bedrock.CfnFlow(this, 'FridgeFlyerFlow', {
       name: 'fridge-flyer-flow',
       executionRoleArn: flowRole.roleArn,
       definition: {
         nodes: [
+          // 入力ノード
           {
             name: 'FlowInputNode',
             type: 'Input',
@@ -89,12 +170,13 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
+          // チラシ処理ノード
           {
-            name: 'ImageProcessorNode',
+            name: 'FlyerProcessorNode',
             type: 'LambdaFunction',
             configuration: {
               lambdaFunction: {
-                lambdaArn: imageProcessorLambda.functionArn,
+                lambdaArn: flyerProcessorLambda.functionArn,
               },
             },
             inputs: [
@@ -111,6 +193,78 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
+          // 冷蔵庫処理ノード
+          {
+            name: 'FridgeProcessorNode',
+            type: 'LambdaFunction',
+            configuration: {
+              lambdaFunction: {
+                lambdaArn: fridgeProcessorLambda.functionArn,
+              },
+            },
+            inputs: [
+              {
+                name: 'codeHookInput',
+                type: 'String',
+                expression: '$.data',
+              },
+            ],
+            outputs: [
+              {
+                name: 'functionResponse',
+                type: 'String',
+              },
+            ],
+          },
+          // レシピ生成プロンプトノード
+          {
+            name: 'RecipePromptNode',
+            type: 'Prompt',
+            configuration: {
+              prompt: {
+                sourceConfiguration: {
+                  inline: {
+                    modelId: 'global.anthropic.claude-opus-4-6-v1',
+                    templateType: 'TEXT',
+                    inferenceConfiguration: {
+                      text: {
+                        maxTokens: 4096,
+                        temperature: 0.7,
+                      },
+                    },
+                    templateConfiguration: {
+                      text: {
+                        text: recipePromptTemplate,
+                        inputVariables: [
+                          { name: 'fridge_contents' },
+                          { name: 'flyer_contents' },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            inputs: [
+              {
+                name: 'fridge_contents',
+                type: 'String',
+                expression: '$.data',
+              },
+              {
+                name: 'flyer_contents',
+                type: 'String',
+                expression: '$.data',
+              },
+            ],
+            outputs: [
+              {
+                name: 'modelCompletion',
+                type: 'String',
+              },
+            ],
+          },
+          // 出力ノード
           {
             name: 'FlowOutputNode',
             type: 'Output',
@@ -127,10 +281,11 @@ export class FridgeFlyerStack extends cdk.Stack {
           },
         ],
         connections: [
+          // Input → FlyerProcessor
           {
-            name: 'InputToProcessor',
+            name: 'InputToFlyerProcessor',
             source: 'FlowInputNode',
-            target: 'ImageProcessorNode',
+            target: 'FlyerProcessorNode',
             type: 'Data',
             configuration: {
               data: {
@@ -139,14 +294,54 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             },
           },
+          // Input → FridgeProcessor
           {
-            name: 'ProcessorToOutput',
-            source: 'ImageProcessorNode',
-            target: 'FlowOutputNode',
+            name: 'InputToFridgeProcessor',
+            source: 'FlowInputNode',
+            target: 'FridgeProcessorNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'document',
+                targetInput: 'codeHookInput',
+              },
+            },
+          },
+          // FlyerProcessor → RecipePrompt (flyer_contents)
+          {
+            name: 'FlyerToPrompt',
+            source: 'FlyerProcessorNode',
+            target: 'RecipePromptNode',
             type: 'Data',
             configuration: {
               data: {
                 sourceOutput: 'functionResponse',
+                targetInput: 'flyer_contents',
+              },
+            },
+          },
+          // FridgeProcessor → RecipePrompt (fridge_contents)
+          {
+            name: 'FridgeToPrompt',
+            source: 'FridgeProcessorNode',
+            target: 'RecipePromptNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'functionResponse',
+                targetInput: 'fridge_contents',
+              },
+            },
+          },
+          // RecipePrompt → Output
+          {
+            name: 'PromptToOutput',
+            source: 'RecipePromptNode',
+            target: 'FlowOutputNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'modelCompletion',
                 targetInput: 'document',
               },
             },
@@ -192,9 +387,14 @@ export class FridgeFlyerStack extends cdk.Stack {
       description: 'Bedrock Flow Alias ID',
     });
 
-    new cdk.CfnOutput(this, 'ImageProcessorLambdaArn', {
-      value: imageProcessorLambda.functionArn,
-      description: 'Image Processor Lambda ARN',
+    new cdk.CfnOutput(this, 'FlyerProcessorLambdaArn', {
+      value: flyerProcessorLambda.functionArn,
+      description: 'Flyer Processor Lambda ARN',
+    });
+
+    new cdk.CfnOutput(this, 'FridgeProcessorLambdaArn', {
+      value: fridgeProcessorLambda.functionArn,
+      description: 'Fridge Processor Lambda ARN',
     });
   }
 }
