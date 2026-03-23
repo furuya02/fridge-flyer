@@ -190,6 +190,25 @@ aws s3 sync s3://fridge-flyer-<your-account-id>/results/ ./results/
   "model_id": "global.anthropic.claude-opus-4-6-v1"
 }
 ```
+* 生成されたHTMLのレビュー（上）
+
+![](images/001.png)
+
+* 生成されたHTMLのレビュー（中）
+
+![](images/002.png)
+
+* 生成されたHTMLのレビュー（下）
+
+![](images/003.png)
+
+* 生成されたHTMLのレビュー（冷蔵庫の内容一覧）
+
+![](images/004.png)
+
+* 生成されたHTMLのレビュー（チラシの内容一覧）
+
+![](images/005.png)
 
 ## 設定
 
