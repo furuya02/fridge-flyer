@@ -191,6 +191,26 @@ aws s3 sync s3://fridge-flyer-<your-account-id>/results/ ./results/
 }
 ```
 
+* Generated HTML Review (Top)
+
+![](images/001.png)
+
+* Generated HTML Review (Middle)
+
+![](images/002.png)
+
+* Generated HTML Review (Bottom)
+
+![](images/003.png)
+
+* Generated HTML Review (Refrigerator Contents List)
+
+![](images/004.png)
+
+* Generated HTML Review (Flyer Contents List)
+
+![](images/005.png)
+
 ## Configuration
 
 Edit `cdk/lib/fridge-flyer-stack.ts` to customize:
