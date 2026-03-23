@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fridge Flyer - 冷蔵庫×チラシ レシピ提案</title>
+    <style>
+      :root {
+        --primary: #e85d3a;
+        --primary-light: #fff5f2;
+        --accent: #2d8a4e;
+        --accent-light: #e8f5e9;
+        --text: #333;
+        --text-light: #666;
+        --bg: #fafafa;
+        --card-bg: #fff;
+        --border: #e0e0e0;
+        --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.7;
+      }
+
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+
+      header {
+        background: linear-gradient(135deg, var(--primary), #d04a2a);
+        color: #fff;
+        padding: 40px 0;
+        text-align: center;
+      }
+
+      header h1 {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+      }
+
+      header p {
+        font-size: 1rem;
+        opacity: 0.9;
+      }
+
+      section {
+        margin: 40px 0;
+      }
+
+      .section-title {
+        font-size: 1.4rem;
+        border-left: 4px solid var(--primary);
+        padding-left: 12px;
+        margin-bottom: 24px;
+        color: var(--text);
+      }
+
+      .source-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      .source-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .source-card img {
+        width: 100%;
+        height: 240px;
+        object-fit: cover;
+        cursor: zoom-in;
+      }
+
+      .source-card .card-body {
+        padding: 16px 20px;
+      }
+
+      .source-card h3 {
+        font-size: 1.1rem;
+        margin-bottom: 8px;
+        color: var(--primary);
+      }
+
+      .source-card p {
+        font-size: 0.85rem;
+        color: var(--text-light);
+      }
+
+      .recipe-list {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+
+      .recipe-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        align-items: start;
+      }
+
+      .recipe-card img {
+        width: 100%;
+        height: 280px;
+        object-fit: cover;
+      }
+
+      .recipe-card .recipe-body {
+        padding: 24px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .recipe-card .recipe-label {
+        display: inline-block;
+        background: var(--primary);
+        color: #fff;
+        font-size: 0.75rem;
+        padding: 3px 10px;
+        border-radius: 20px;
+        width: fit-content;
+      }
+
+      .recipe-card .recipe-label.dessert {
+        background: var(--accent);
+      }
+
+      .recipe-card h3 {
+        font-size: 1.25rem;
+      }
+
+      .recipe-card .recipe-desc {
+        font-size: 0.9rem;
+        color: var(--text-light);
+      }
+
+      .recipe-card .ingredients {
+        margin-top: 4px;
+      }
+
+      .recipe-card .ingredients h4 {
+        font-size: 0.85rem;
+        color: var(--primary);
+        margin-bottom: 4px;
+      }
+
+      .recipe-card .ingredients ul {
+        list-style: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .recipe-card .ingredients li {
+        background: var(--primary-light);
+        font-size: 0.8rem;
+        padding: 3px 10px;
+        border-radius: 16px;
+        color: var(--primary);
+      }
+
+      .recipe-card .ingredients li.buy {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+
+      .recipe-card details {
+        margin-top: 4px;
+      }
+
+      .recipe-card summary {
+        font-size: 0.85rem;
+        font-weight: bold;
+        color: var(--primary);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .recipe-card .steps {
+        margin-top: 8px;
+        padding-left: 20px;
+        font-size: 0.85rem;
+        color: var(--text-light);
+      }
+
+      .recipe-card .steps li {
+        background: none;
+        color: var(--text-light);
+        padding: 2px 0;
+        border-radius: 0;
+        font-size: 0.85rem;
+        display: list-item;
+        list-style: decimal;
+      }
+
+      .tag-legend {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 16px;
+        font-size: 0.8rem;
+        color: var(--text-light);
+      }
+
+      .tag-legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .tag-legend .dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+      }
+
+      .tag-legend .dot.fridge {
+        background: var(--primary-light);
+        border: 1px solid var(--primary);
+      }
+
+      .tag-legend .dot.flyer {
+        background: var(--accent-light);
+        border: 1px solid var(--accent);
+      }
+
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+        cursor: zoom-out;
+      }
+
+      .modal-overlay.active {
+        display: flex;
+      }
+
+      .modal-overlay img {
+        max-width: 90%;
+        max-height: 90%;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+      }
+
+      .shopping-summary {
+        background: var(--card-bg);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        padding: 24px 28px;
+        margin-top: 24px;
+      }
+
+      .shopping-summary h3 {
+        font-size: 1.1rem;
+        color: var(--accent);
+        margin-bottom: 16px;
+      }
+
+      .shopping-summary table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 16px;
+      }
+
+      .shopping-summary th {
+        text-align: left;
+        padding: 10px 12px;
+        background: var(--accent-light);
+        color: var(--accent);
+        font-size: 0.85rem;
+        font-weight: bold;
+      }
+
+      .shopping-summary td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.9rem;
+      }
+
+      .shopping-summary .total {
+        text-align: right;
+        font-weight: bold;
+        color: var(--primary);
+        font-size: 1rem;
+        margin: 16px 0;
+      }
+
+      .shopping-summary .note {
+        font-size: 0.8rem;
+        color: var(--text-light);
+        line-height: 1.6;
+      }
+
+      footer {
+        text-align: center;
+        padding: 32px 0;
+        color: var(--text-light);
+        font-size: 0.8rem;
+        border-top: 1px solid var(--border);
+        margin-top: 40px;
+      }
+
+      @media (max-width: 768px) {
+        .source-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .recipe-card {
+          grid-template-columns: 1fr;
+        }
+
+        .recipe-card img {
+          height: 220px;
+          min-height: auto;
+        }
+
+        header h1 {
+          font-size: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="container">
+        <h1>Fridge Flyer</h1>
+        <p>冷蔵庫の食材 x チラシの特売品で、今日のレシピを提案</p>
+      </div>
+    </header>
+
+    <main class="container">
+      <!-- 入力ソース -->
+      <section>
+        <h2 class="section-title">入力ソース</h2>
+        <div class="source-grid">
+          <div class="source-card">
+            <img src="../fridge.jpg" alt="冷蔵庫の中身" />
+            <div class="card-body">
+              <h3>冷蔵庫の中身</h3>
+              <p>冷蔵庫の食材を分析しました</p>
+            </div>
+          </div>
+          <div class="source-card">
+            <img src="../flyer.jpg" alt="チラシ" />
+            <div class="card-body">
+              <h3>スーパーのチラシ</h3>
+              <p>チラシの特売品を分析しました</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- レシピ提案 -->
+      <section>
+        <h2 class="section-title">レシピ提案</h2>
+
+        <div class="tag-legend">
+          <span><span class="dot fridge"></span> 冷蔵庫の食材</span>
+          <span><span class="dot flyer"></span> 買い足し（チラシ特売品）</span>
+        </div>
+
+        <div class="recipe-list">
+          <!-- 料理 1 -->
+          <div class="recipe-card">
+            <img
+              src="../results/recipe_dish1.png"
+              alt="BLTオープンサンド 〜彩り野菜たっぷり〜"
+            />
+            <div class="recipe-body">
+              <span class="recipe-label">料理 1</span>
+              <h3>BLTオープンサンド 〜彩り野菜たっぷり〜</h3>
+              <p class="recipe-desc">
+                冷蔵庫にあるパン・ハム/ベーコン・トマトを主役に、チラシ特売のサニーレタスを加えた、朝食にもランチにもぴったりの華やかなオープンサンドです。黄パプリカの彩りが食卓を春らしく演出します。
+              </p>
+              <div class="ingredients">
+                <h4>材料</h4>
+                <ul>
+                  <li>パン（食パンまたはロールパン）… 2〜4枚</li>
+                  <li>ハム／ベーコン（スライス）… 4〜6枚</li>
+                  <li>トマト … 1個（スライス）</li>
+                  <li>黄パプリカ … 1/2個（薄切り）</li>
+                  <li>サニーレタス … 2〜3枚 **【買い足し】**</li>
+                  <li>マヨネーズ・塩・こしょう・バター … 各適量（家庭の常備調味料）</li>
+                  <li>サニーレタス（福岡県産他）… 1個／128円（税抜）</li>
+                  <li>トルティーヤ（プレーン）BESTPRICE **【買い足し】**</li>
+                  <li>キャベツ … 1/4玉（千切り）</li>
+                  <li>玉ねぎ … 1個（半分はみじん切り、半分はスライス）</li>
+                  <li>トマト … 残り半分〜1個（角切り）※料理1と分けて使用</li>
+                  <li>黄パプリカ … 残り1/2個（角切り）</li>
+                  <li>ハム／ベーコン（スライス）… 3〜4枚（細切り）</li>
+                  <li>サニーレタス … 残り（料理1の余り）</li>
+                  <li>【サルサソース】トマト角切り＋玉ねぎみじん切り＋塩＋レモン汁（またはお酢）＋少量のごま油かオリーブオイル</li>
+                  <li>塩・こしょう・お好みでケチャップやマヨネーズ</li>
+                  <li>トルティーヤ（プレーン）BESTPRICE … 1袋／398円（税抜）</li>
+                  <li>牛乳（おいしい牛乳）… 200ml</li>
+                  <li>パインブロック（キャジディーナ デラックス） **【買い足し】** … 1/2パック分（残りは翌日のおやつに）</li>
+                  <li>砂糖 … 大さじ2〜3（お好みで調整）</li>
+                  <li>片栗粉 … 大さじ1と1/2（ゼラチンがあればゼラチン5gでも可）</li>
+                  <li>水 … 大さじ2（片栗粉を溶く用）</li>
+                  <li>バニラエッセンス … あれば2〜3滴</li>
+                  <li>キャジディーナ デラックス パインブロック … 1パック／398円（税抜）</li>
+                  <li class="buy">サニーレタス（福岡県産他）… 1個／128円（税抜）</li>
+                  <li class="buy">トルティーヤ（プレーン）BESTPRICE **【買い足し】**</li>
+                  <li class="buy">キャベツ … 1/4玉（千切り）</li>
+                  <li class="buy">玉ねぎ … 1個（半分はみじん切り、半分はスライス）</li>
+                  <li class="buy">トマト … 残り半分〜1個（角切り）※料理1と分けて使用</li>
+                  <li class="buy">黄パプリカ … 残り1/2個（角切り）</li>
+                  <li class="buy">ハム／ベーコン（スライス）… 3〜4枚（細切り）</li>
+                  <li class="buy">サニーレタス … 残り（料理1の余り）</li>
+                  <li class="buy">【サルサソース】トマト角切り＋玉ねぎみじん切り＋塩＋レモン汁（またはお酢）＋少量のごま油かオリーブオイル</li>
+                  <li class="buy">塩・こしょう・お好みでケチャップやマヨネーズ</li>
+                  <li class="buy">トルティーヤ（プレーン）BESTPRICE … 1袋／398円（税抜）</li>
+                  <li class="buy">牛乳（おいしい牛乳）… 200ml</li>
+                  <li class="buy">パインブロック（キャジディーナ デラックス） **【買い足し】** … 1/2パック分（残りは翌日のおやつに）</li>
+                  <li class="buy">砂糖 … 大さじ2〜3（お好みで調整）</li>
+                  <li class="buy">片栗粉 … 大さじ1と1/2（ゼラチンがあればゼラチン5gでも可）</li>
+                  <li class="buy">水 … 大さじ2（片栗粉を溶く用）</li>
+                  <li class="buy">バニラエッセンス … あれば2〜3滴</li>
+                  <li class="buy">キャジディーナ デラックス パインブロック … 1パック／398円（税抜）</li>
+                </ul>
+              </div>
+              <details>
+                <summary>作り方を見る</summary>
+                <ol class="steps">
+                  <li>パンをトースターで軽くこんがり焼き、片面にバターを薄く塗る。</li>
+                  <li>ハム／ベーコンをフライパンで中火でカリッと焼く（ベーコンの場合は油不要、ハムの場合はバター少々で）。</li>
+                  <li>トマトは5mm厚の輪切りに、黄パプリカは薄くスライスする。</li>
+                  <li>サニーレタスは洗って水気をしっかり切り、食べやすい大きさにちぎる。</li>
+                  <li>トーストの上にサニーレタス → マヨネーズを細く絞る → トマト → 焼いたハム/ベーコン → 黄パプリカの順に重ねる。</li>
+                  <li>仕上げに塩・こしょうを軽く振り、お好みでマヨネーズを追加して完成。</li>
+                  <li>**即席サルサを作る**：トマト1/4個分を細かい角切り、玉ねぎ1/4個分をみじん切りにし、ボウルで塩ひとつまみ・酢（またはレモン汁）小さじ1・オリーブオイル小さじ1と和えて冷蔵庫で休ませる。</li>
+                  <li>キャベツを千切りにし、水にさらしてシャキッとさせ、水気を切る。</li>
+                  <li>黄パプリカは1cm角の角切り、玉ねぎ（残り）は薄くスライスする。</li>
+                  <li>フライパンに少量の油を熱し、スライスした玉ねぎ → ハム/ベーコン細切り → 黄パプリカの順に中火で2〜3分炒め、塩・こしょうで味を調える。</li>
+                  <li>トルティーヤをフライパンまたは電子レンジで軽く温める（しなやかになり巻きやすくなる）。</li>
+                  <li>温めたトルティーヤの中央にサニーレタス → キャベツ千切り → 炒めた具材 → 即席サルサソースの順にのせる。</li>
+                  <li>お好みでケチャップやマヨネーズをかけ、両端を折り込みながらくるりと巻いて完成。</li>
+                  <li>パインブロックの半量を1cm角の小さめに切り、グラスやカップの底に均等に入れておく。残りの半量は飾り用に少し大きめに切っておく。</li>
+                  <li>小鍋に牛乳と砂糖を入れ、弱〜中火で温めながら砂糖を完全に溶かす（沸騰させない）。</li>
+                  <li>**片栗粉バージョン**：水で溶いた片栗粉を②に少しずつ加え、とろみがつくまで絶えず混ぜながら2〜3分加熱する。/**ゼラチンバージョン**：火を止めてからふやかしたゼラチンを加え、よく混ぜて溶かす。</li>
+                  <li>お好みでバニラエッセンスを加えてひと混ぜする。</li>
+                  <li>パインを入れたグラスに③を静かに注ぎ入れ、粗熱が取れたらラップをして冷蔵庫で2〜3時間冷やし固める。</li>
+                  <li>食べる直前に飾り用のパインブロックをトップにのせて完成。お好みで牛乳を少量かけても美味。</li>
+                </ol>
+              </details>
+            </div>
+          </div>
+
+          <!-- 料理 2 -->
+          <div class="recipe-card">
+            <img
+              src="../results/recipe_dish2.png"
+              alt="野菜たっぷりタコス 〜トルティーヤで巻く春ごはん〜"
+            />
+            <div class="recipe-body">
+              <span class="recipe-label">料理 2</span>
+              <h3>野菜たっぷりタコス 〜トルティーヤで巻く春ごはん〜</h3>
+              <p class="recipe-desc">
+                チラシで特売中のトルティーヤを買い足し、冷蔵庫のキャベツ・玉ねぎ・トマト・黄パプリカをたっぷり使ったカラフルなタコス風ラップです。ハムを具材のたんぱく質として活用し、手軽なのに満足感のある一品に仕上げます。
+              </p>
+              <div class="ingredients">
+                <h4>材料</h4>
+                <ul>
+                  <li>トルティーヤ（プレーン）BESTPRICE **【買い足し】**</li>
+                  <li>キャベツ … 1/4玉（千切り）</li>
+                  <li>玉ねぎ … 1個（半分はみじん切り、半分はスライス）</li>
+                  <li>トマト … 残り半分〜1個（角切り）※料理1と分けて使用</li>
+                  <li>黄パプリカ … 残り1/2個（角切り）</li>
+                  <li>ハム／ベーコン（スライス）… 3〜4枚（細切り）</li>
+                  <li>サニーレタス … 残り（料理1の余り）</li>
+                  <li>【サルサソース】トマト角切り＋玉ねぎみじん切り＋塩＋レモン汁（またはお酢）＋少量のごま油かオリーブオイル</li>
+                  <li>塩・こしょう・お好みでケチャップやマヨネーズ</li>
+                  <li>トルティーヤ（プレーン）BESTPRICE … 1袋／398円（税抜）</li>
+                  <li>牛乳（おいしい牛乳）… 200ml</li>
+                  <li>パインブロック（キャジディーナ デラックス） **【買い足し】** … 1/2パック分（残りは翌日のおやつに）</li>
+                  <li>砂糖 … 大さじ2〜3（お好みで調整）</li>
+                  <li>片栗粉 … 大さじ1と1/2（ゼラチンがあればゼラチン5gでも可）</li>
+                  <li>水 … 大さじ2（片栗粉を溶く用）</li>
+                  <li>バニラエッセンス … あれば2〜3滴</li>
+                  <li>キャジディーナ デラックス パインブロック … 1パック／398円（税抜）</li>
+                  <li class="buy">トルティーヤ（プレーン）BESTPRICE … 1袋／398円（税抜）</li>
+                  <li class="buy">牛乳（おいしい牛乳）… 200ml</li>
+                  <li class="buy">パインブロック（キャジディーナ デラックス） **【買い足し】** … 1/2パック分（残りは翌日のおやつに）</li>
+                  <li class="buy">砂糖 … 大さじ2〜3（お好みで調整）</li>
+                  <li class="buy">片栗粉 … 大さじ1と1/2（ゼラチンがあればゼラチン5gでも可）</li>
+                  <li class="buy">水 … 大さじ2（片栗粉を溶く用）</li>
+                  <li class="buy">バニラエッセンス … あれば2〜3滴</li>
+                  <li class="buy">キャジディーナ デラックス パインブロック … 1パック／398円（税抜）</li>
+                </ul>
+              </div>
+              <details>
+                <summary>作り方を見る</summary>
+                <ol class="steps">
+                  <li>**即席サルサを作る**：トマト1/4個分を細かい角切り、玉ねぎ1/4個分をみじん切りにし、ボウルで塩ひとつまみ・酢（またはレモン汁）小さじ1・オリーブオイル小さじ1と和えて冷蔵庫で休ませる。</li>
+                  <li>キャベツを千切りにし、水にさらしてシャキッとさせ、水気を切る。</li>
+                  <li>黄パプリカは1cm角の角切り、玉ねぎ（残り）は薄くスライスする。</li>
+                  <li>フライパンに少量の油を熱し、スライスした玉ねぎ → ハム/ベーコン細切り → 黄パプリカの順に中火で2〜3分炒め、塩・こしょうで味を調える。</li>
+                  <li>トルティーヤをフライパンまたは電子レンジで軽く温める（しなやかになり巻きやすくなる）。</li>
+                  <li>温めたトルティーヤの中央にサニーレタス → キャベツ千切り → 炒めた具材 → 即席サルサソースの順にのせる。</li>
+                  <li>お好みでケチャップやマヨネーズをかけ、両端を折り込みながらくるりと巻いて完成。</li>
+                  <li>パインブロックの半量を1cm角の小さめに切り、グラスやカップの底に均等に入れておく。残りの半量は飾り用に少し大きめに切っておく。</li>
+                  <li>小鍋に牛乳と砂糖を入れ、弱〜中火で温めながら砂糖を完全に溶かす（沸騰させない）。</li>
+                  <li>**片栗粉バージョン**：水で溶いた片栗粉を②に少しずつ加え、とろみがつくまで絶えず混ぜながら2〜3分加熱する。/**ゼラチンバージョン**：火を止めてからふやかしたゼラチンを加え、よく混ぜて溶かす。</li>
+                  <li>お好みでバニラエッセンスを加えてひと混ぜする。</li>
+                  <li>パインを入れたグラスに③を静かに注ぎ入れ、粗熱が取れたらラップをして冷蔵庫で2〜3時間冷やし固める。</li>
+                  <li>食べる直前に飾り用のパインブロックをトップにのせて完成。お好みで牛乳を少量かけても美味。</li>
+                </ol>
+              </details>
+            </div>
+          </div>
+
+          <!-- デザート -->
+          <div class="recipe-card">
+            <img
+              src="../results/recipe_dessert.png"
+              alt="パインブロックのミルクプリン 〜ふるふる春スイーツ〜"
+            />
+            <div class="recipe-body">
+              <span class="recipe-label dessert">デザート</span>
+              <h3>パインブロックのミルクプリン 〜ふるふる春スイーツ〜</h3>
+              <p class="recipe-desc">
+                チラシ特売のパインブロックと冷蔵庫の牛乳を組み合わせた、やさしい甘さのミルクプリンです。ゼラチンなしでも片栗粉で作れる簡単バージョンもご紹介。ゴロッとしたパインの食感と、なめらかなミルクプリンのコントラストが楽しい春のデザートです。
+              </p>
+              <div class="ingredients">
+                <h4>材料</h4>
+                <ul>
+                  <li>牛乳（おいしい牛乳）… 200ml</li>
+                  <li>パインブロック（キャジディーナ デラックス） **【買い足し】** … 1/2パック分（残りは翌日のおやつに）</li>
+                  <li>砂糖 … 大さじ2〜3（お好みで調整）</li>
+                  <li>片栗粉 … 大さじ1と1/2（ゼラチンがあればゼラチン5gでも可）</li>
+                  <li>水 … 大さじ2（片栗粉を溶く用）</li>
+                  <li>バニラエッセンス … あれば2〜3滴</li>
+                  <li>キャジディーナ デラックス パインブロック … 1パック／398円（税抜）</li>
+                  <li class="buy">キャジディーナ デラックス パインブロック … 1パック／398円（税抜）</li>
+                </ul>
+              </div>
+              <details>
+                <summary>作り方を見る</summary>
+                <ol class="steps">
+                  <li>パインブロックの半量を1cm角の小さめに切り、グラスやカップの底に均等に入れておく。残りの半量は飾り用に少し大きめに切っておく。</li>
+                  <li>小鍋に牛乳と砂糖を入れ、弱〜中火で温めながら砂糖を完全に溶かす（沸騰させない）。</li>
+                  <li>**片栗粉バージョン**：水で溶いた片栗粉を②に少しずつ加え、とろみがつくまで絶えず混ぜながら2〜3分加熱する。/**ゼラチンバージョン**：火を止めてからふやかしたゼラチンを加え、よく混ぜて溶かす。</li>
+                  <li>お好みでバニラエッセンスを加えてひと混ぜする。</li>
+                  <li>パインを入れたグラスに③を静かに注ぎ入れ、粗熱が取れたらラップをして冷蔵庫で2〜3時間冷やし固める。</li>
+                  <li>食べる直前に飾り用のパインブロックをトップにのせて完成。お好みで牛乳を少量かけても美味。</li>
+                </ol>
+              </details>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- お買い物まとめ -->
+      <section>
+        <h2 class="section-title">お買い物まとめ</h2>
+        <div class="shopping-summary">
+          <h3>チラシから買い足す商品</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>買い足し品</th>
+                <th>価格（税込）</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>サニーレタス（料理1・2で共用）</td>
+                <td>128円</td>
+              </tr>
+              <tr>
+                <td>トルティーヤ BESTPRICE（料理2）</td>
+                <td>398円</td>
+              </tr>
+              <tr>
+                <td>パインブロック（デザート）</td>
+                <td>398円</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="total">買い足し合計: 924円（税抜）</p>
+          
+          
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Image Modal -->
+    <div class="modal-overlay" id="modal" onclick="this.classList.remove('active')">
+      <img id="modal-img" src="" alt="" />
+    </div>
+
+    <script>
+      document.querySelectorAll('.source-card img').forEach(function(img) {
+        img.addEventListener('click', function() {
+          var modal = document.getElementById('modal');
+          var modalImg = document.getElementById('modal-img');
+          modalImg.src = this.src;
+          modalImg.alt = this.alt;
+          modal.classList.add('active');
+        });
+      });
+    </script>
+
+    <footer>
+      <div class="container">
+        <p>Fridge Flyer &mdash; Powered by Amazon Bedrock Flow</p>
+      </div>
+    </footer>
+  </body>
+</html>

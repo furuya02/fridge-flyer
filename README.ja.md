@@ -90,6 +90,38 @@ cdk bootstrap
 cdk deploy
 ```
 
+### Flowバージョンの更新（再デプロイ時）
+
+CDKを再デプロイした後は、新しいFlowバージョンを作成してAliasを更新する必要があります：
+
+```bash
+# Flow IDを取得
+FLOW_ID=$(aws cloudformation describe-stacks \
+  --stack-name FridgeFlyerStack \
+  --query "Stacks[0].Outputs[?OutputKey=='FlowId'].OutputValue" \
+  --output text)
+
+ALIAS_ID=$(aws cloudformation describe-stacks \
+  --stack-name FridgeFlyerStack \
+  --query "Stacks[0].Outputs[?OutputKey=='FlowAliasId'].OutputValue" \
+  --output text)
+
+# 新しいバージョンを作成
+VERSION=$(aws bedrock-agent create-flow-version \
+  --flow-identifier "$FLOW_ID" \
+  --query "version" \
+  --output text)
+
+# Aliasを新しいバージョンに更新
+aws bedrock-agent update-flow-alias \
+  --flow-identifier "$FLOW_ID" \
+  --alias-identifier "$ALIAS_ID" \
+  --name live \
+  --routing-configuration "[{\"flowVersion\":\"$VERSION\"}]"
+
+echo "Flow updated to version $VERSION"
+```
+
 ## 使用方法
 
 ### 基本的な使用方法

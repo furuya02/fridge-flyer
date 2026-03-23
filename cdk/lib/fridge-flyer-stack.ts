@@ -300,7 +300,7 @@ export class FridgeFlyerStack extends cdk.Stack {
                     inferenceConfiguration: {
                       text: {
                         maxTokens: 4096,
-                        temperature: 0.7,
+                        temperature: 0.9,
                       },
                     },
                     templateConfiguration: {
@@ -405,6 +405,7 @@ export class FridgeFlyerStack extends cdk.Stack {
             ],
           },
           // マージノード（Promptで入力を待ち合わせてレシピテキストのみ出力）
+          // 高速なHaikuモデルを使用（待機目的のため）
           {
             name: 'MergeNode',
             type: 'Prompt',
@@ -412,7 +413,7 @@ export class FridgeFlyerStack extends cdk.Stack {
               prompt: {
                 sourceConfiguration: {
                   inline: {
-                    modelId: 'global.anthropic.claude-opus-4-6-v1',
+                    modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
                     templateType: 'TEXT',
                     inferenceConfiguration: {
                       text: {
