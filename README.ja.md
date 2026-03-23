@@ -19,27 +19,48 @@ Amazon Bedrock FlowsとClaudeの画像認識機能を使用して、小売店の
 ## アーキテクチャ
 
 ```
-┌──────────────────┐
-│   S3 Bucket      │
-│   (flyer.jpg)    │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  Bedrock Flow    │
-│                  │
-│ ┌──────────────┐ │
-│ │ Input Node   │ │
-│ └──────┬───────┘ │
-│        ▼         │
-│ ┌──────────────┐ │
-│ │ Lambda Node  │─┼──► ImageProcessorLambda
-│ └──────┬───────┘ │         │
-│        ▼         │         ▼
-│ ┌──────────────┐ │   Claude Opus 4.6
-│ │ Output Node  │ │         │
-│ └──────────────┘ │         ▼
-└──────────────────┘   S3 results/*.json
+┌─────────────────────────────────────────────────────────────────────┐
+│  S3 Bucket                                                          │
+│  ├── flyer.jpg（スーパーのチラシ）                                    │
+│  └── fridge.jpg（冷蔵庫の中身）                                       │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  Bedrock Flow                                                       │
+│                                                                     │
+│  ┌─────────┐    ┌─────────────────┐    ┌──────────────────┐        │
+│  │  Input  │───►│ FlyerProcessor  │───►│                  │        │
+│  │  Node   │    │    (Lambda)     │    │  RecipePrompt    │        │
+│  │         │───►│ FridgeProcessor │───►│    (Claude)      │        │
+│  └─────────┘    │    (Lambda)     │    │                  │        │
+│                 └─────────────────┘    └────────┬─────────┘        │
+│                                                 │                   │
+│                 ┌───────────────────────────────┼───────────────┐  │
+│                 │                               │               │  │
+│                 ▼                               ▼               ▼  │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐ │
+│  │ ImageGenDish1    │  │ ImageGenDish2    │  │ ImageGenDessert  │ │
+│  │    (Lambda)      │  │    (Lambda)      │  │    (Lambda)      │ │
+│  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘ │
+│           │                     │                     │            │
+│           └─────────────────────┼─────────────────────┘            │
+│                                 ▼                                   │
+│                          ┌─────────────┐    ┌──────────┐           │
+│                          │  MergeNode  │───►│  Output  │           │
+│                          │  (Prompt)   │    │   Node   │           │
+│                          └─────────────┘    └──────────┘           │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  S3 Bucket (results/)                                               │
+│  ├── flyer_description.json                                         │
+│  ├── fridge_description.json                                        │
+│  ├── recipe_dish1.png                                               │
+│  ├── recipe_dish2.png                                               │
+│  └── recipe_dessert.png                                             │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 前提条件
@@ -73,17 +94,46 @@ cdk deploy
 
 ### 基本的な使用方法
 
-1. チラシ画像をS3にアップロード:
+1. 画像をS3にアップロード:
 ```bash
 aws s3 cp flyer.jpg s3://fridge-flyer-<your-account-id>/
+aws s3 cp fridge.jpg s3://fridge-flyer-<your-account-id>/
 ```
 
-2. AWSコンソールまたはCLIでBedrock Flowを実行
+2. Flow IDとAlias IDを取得:
+```bash
+aws cloudformation describe-stacks \
+  --stack-name FridgeFlyerStack \
+  --query "Stacks[0].Outputs" \
+  --output table
+```
 
-3. `results/`フォルダで結果を確認:
+3. CLIでBedrock Flowを実行:
+```bash
+FLOW_ID="<出力されたFlowId>"
+ALIAS_ID="<出力されたFlowAliasId>"
+
+aws bedrock-agent-runtime invoke-flow \
+  --region ap-northeast-1 \
+  --flow-identifier "$FLOW_ID" \
+  --flow-alias-identifier "$ALIAS_ID" \
+  --inputs '[{"content":{"document":"start"},"nodeName":"FlowInputNode","nodeOutputName":"document"}]'
+```
+
+4. `results/`フォルダで結果を確認:
 ```bash
 aws s3 ls s3://fridge-flyer-<your-account-id>/results/
 ```
+
+### 出力ファイル
+
+| ファイル | 説明 |
+|---------|------|
+| `results/flyer_description.json` | チラシから抽出した商品リスト |
+| `results/fridge_description.json` | 冷蔵庫から抽出した食材リスト |
+| `results/recipe_dish1.png` | 料理1の生成画像 |
+| `results/recipe_dish2.png` | 料理2の生成画像 |
+| `results/recipe_dessert.png` | デザートの生成画像 |
 
 ### 出力形式
 
@@ -116,8 +166,10 @@ fridge-flyer/
 │   ├── bin/cdk.ts                    # CDKアプリエントリポイント
 │   ├── lib/fridge-flyer-stack.ts     # メインスタック定義
 │   ├── lambda/
-│   │   └── image-processor/
-│   │       └── index.py              # 画像処理Lambda
+│   │   ├── image-processor/
+│   │   │   └── index.py              # 画像分析Lambda（Claude）
+│   │   └── image-generator/
+│   │       └── index.py              # レシピ画像生成Lambda（Nova Canvas）
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── cdk.json

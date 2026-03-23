@@ -70,6 +70,74 @@ export class FridgeFlyerStack extends cdk.Stack {
       },
     });
 
+    // 画像生成Lambda用のIAMロール
+    const imageGeneratorRole = new iam.Role(this, 'ImageGeneratorRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
+    });
+
+    // S3書き込み権限
+    imageGeneratorRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [`${bucket.bucketArn}/*`],
+    }));
+
+    // Bedrock画像生成権限
+    imageGeneratorRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['bedrock:InvokeModel'],
+      resources: ['*'],
+    }));
+
+    // 画像生成Lambda（料理1用）
+    const imageGenDish1Lambda = new lambda.Function(this, 'ImageGenDish1Lambda', {
+      functionName: 'fridge-flyer-image-gen-dish1',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambda/image-generator'),
+      role: imageGeneratorRole,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 1024,
+      environment: {
+        OUTPUT_BUCKET: bucket.bucketName,
+        RECIPE_INDEX: '1',
+        IMAGE_MODEL_ID: 'amazon.nova-canvas-v1:0',
+      },
+    });
+
+    // 画像生成Lambda（料理2用）
+    const imageGenDish2Lambda = new lambda.Function(this, 'ImageGenDish2Lambda', {
+      functionName: 'fridge-flyer-image-gen-dish2',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambda/image-generator'),
+      role: imageGeneratorRole,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 1024,
+      environment: {
+        OUTPUT_BUCKET: bucket.bucketName,
+        RECIPE_INDEX: '2',
+        IMAGE_MODEL_ID: 'amazon.nova-canvas-v1:0',
+      },
+    });
+
+    // 画像生成Lambda（デザート用）
+    const imageGenDessertLambda = new lambda.Function(this, 'ImageGenDessertLambda', {
+      functionName: 'fridge-flyer-image-gen-dessert',
+      runtime: lambda.Runtime.PYTHON_3_12,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset('lambda/image-generator'),
+      role: imageGeneratorRole,
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 1024,
+      environment: {
+        OUTPUT_BUCKET: bucket.bucketName,
+        RECIPE_INDEX: '3',
+        IMAGE_MODEL_ID: 'amazon.nova-canvas-v1:0',
+      },
+    });
+
     // Bedrock Flow用のIAMロール
     const flowRole = new iam.Role(this, 'BedrockFlowRole', {
       assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
@@ -81,6 +149,9 @@ export class FridgeFlyerStack extends cdk.Stack {
       resources: [
         flyerProcessorLambda.functionArn,
         fridgeProcessorLambda.functionArn,
+        imageGenDish1Lambda.functionArn,
+        imageGenDish2Lambda.functionArn,
+        imageGenDessertLambda.functionArn,
       ],
     }));
 
@@ -150,7 +221,7 @@ export class FridgeFlyerStack extends cdk.Stack {
 - [買う必要がある食材2]`;
 
     // Bedrock Flow定義
-    // Input → [FlyerLambda, FridgeLambda] → Prompt → Output
+    // Input → [FlyerLambda, FridgeLambda] → Prompt → [ImageGen1, ImageGen2, ImageGen3] → Output
     const flow = new bedrock.CfnFlow(this, 'FridgeFlyerFlow', {
       name: 'fridge-flyer-flow',
       executionRoleArn: flowRole.roleArn,
@@ -264,6 +335,135 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
+          // 画像生成ノード（料理1）
+          {
+            name: 'ImageGenDish1Node',
+            type: 'LambdaFunction',
+            configuration: {
+              lambdaFunction: {
+                lambdaArn: imageGenDish1Lambda.functionArn,
+              },
+            },
+            inputs: [
+              {
+                name: 'codeHookInput',
+                type: 'String',
+                expression: '$.data',
+              },
+            ],
+            outputs: [
+              {
+                name: 'functionResponse',
+                type: 'String',
+              },
+            ],
+          },
+          // 画像生成ノード（料理2）
+          {
+            name: 'ImageGenDish2Node',
+            type: 'LambdaFunction',
+            configuration: {
+              lambdaFunction: {
+                lambdaArn: imageGenDish2Lambda.functionArn,
+              },
+            },
+            inputs: [
+              {
+                name: 'codeHookInput',
+                type: 'String',
+                expression: '$.data',
+              },
+            ],
+            outputs: [
+              {
+                name: 'functionResponse',
+                type: 'String',
+              },
+            ],
+          },
+          // 画像生成ノード（デザート）
+          {
+            name: 'ImageGenDessertNode',
+            type: 'LambdaFunction',
+            configuration: {
+              lambdaFunction: {
+                lambdaArn: imageGenDessertLambda.functionArn,
+              },
+            },
+            inputs: [
+              {
+                name: 'codeHookInput',
+                type: 'String',
+                expression: '$.data',
+              },
+            ],
+            outputs: [
+              {
+                name: 'functionResponse',
+                type: 'String',
+              },
+            ],
+          },
+          // マージノード（Promptで入力を待ち合わせてレシピテキストのみ出力）
+          {
+            name: 'MergeNode',
+            type: 'Prompt',
+            configuration: {
+              prompt: {
+                sourceConfiguration: {
+                  inline: {
+                    modelId: 'global.anthropic.claude-opus-4-6-v1',
+                    templateType: 'TEXT',
+                    inferenceConfiguration: {
+                      text: {
+                        maxTokens: 4096,
+                        temperature: 0,
+                      },
+                    },
+                    templateConfiguration: {
+                      text: {
+                        text: '以下のテキストをそのまま出力してください。変更や追加は一切しないでください。\n\n{{recipe_text}}',
+                        inputVariables: [
+                          { name: 'recipe_text' },
+                          { name: 'image1_path' },
+                          { name: 'image2_path' },
+                          { name: 'image3_path' },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            inputs: [
+              {
+                name: 'recipe_text',
+                type: 'String',
+                expression: '$.data',
+              },
+              {
+                name: 'image1_path',
+                type: 'String',
+                expression: '$.data',
+              },
+              {
+                name: 'image2_path',
+                type: 'String',
+                expression: '$.data',
+              },
+              {
+                name: 'image3_path',
+                type: 'String',
+                expression: '$.data',
+              },
+            ],
+            outputs: [
+              {
+                name: 'modelCompletion',
+                type: 'String',
+              },
+            ],
+          },
           // 出力ノード
           {
             name: 'FlowOutputNode',
@@ -333,10 +533,101 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             },
           },
-          // RecipePrompt → Output
+          // RecipePrompt → MergeNode (recipe_text)
           {
-            name: 'PromptToOutput',
+            name: 'PromptToMerge',
             source: 'RecipePromptNode',
+            target: 'MergeNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'modelCompletion',
+                targetInput: 'recipe_text',
+              },
+            },
+          },
+          // RecipePrompt → ImageGenDish1
+          {
+            name: 'PromptToImageGen1',
+            source: 'RecipePromptNode',
+            target: 'ImageGenDish1Node',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'modelCompletion',
+                targetInput: 'codeHookInput',
+              },
+            },
+          },
+          // RecipePrompt → ImageGenDish2
+          {
+            name: 'PromptToImageGen2',
+            source: 'RecipePromptNode',
+            target: 'ImageGenDish2Node',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'modelCompletion',
+                targetInput: 'codeHookInput',
+              },
+            },
+          },
+          // RecipePrompt → ImageGenDessert
+          {
+            name: 'PromptToImageGen3',
+            source: 'RecipePromptNode',
+            target: 'ImageGenDessertNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'modelCompletion',
+                targetInput: 'codeHookInput',
+              },
+            },
+          },
+          // ImageGenDish1 → MergeNode (image1_path)
+          {
+            name: 'ImageGen1ToMerge',
+            source: 'ImageGenDish1Node',
+            target: 'MergeNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'functionResponse',
+                targetInput: 'image1_path',
+              },
+            },
+          },
+          // ImageGenDish2 → MergeNode (image2_path)
+          {
+            name: 'ImageGen2ToMerge',
+            source: 'ImageGenDish2Node',
+            target: 'MergeNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'functionResponse',
+                targetInput: 'image2_path',
+              },
+            },
+          },
+          // ImageGenDessert → MergeNode (image3_path)
+          {
+            name: 'ImageGen3ToMerge',
+            source: 'ImageGenDessertNode',
+            target: 'MergeNode',
+            type: 'Data',
+            configuration: {
+              data: {
+                sourceOutput: 'functionResponse',
+                targetInput: 'image3_path',
+              },
+            },
+          },
+          // MergeNode → FlowOutput
+          {
+            name: 'MergeToOutput',
+            source: 'MergeNode',
             target: 'FlowOutputNode',
             type: 'Data',
             configuration: {
@@ -395,6 +686,21 @@ export class FridgeFlyerStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'FridgeProcessorLambdaArn', {
       value: fridgeProcessorLambda.functionArn,
       description: 'Fridge Processor Lambda ARN',
+    });
+
+    new cdk.CfnOutput(this, 'ImageGenDish1LambdaArn', {
+      value: imageGenDish1Lambda.functionArn,
+      description: 'Image Generator Dish1 Lambda ARN',
+    });
+
+    new cdk.CfnOutput(this, 'ImageGenDish2LambdaArn', {
+      value: imageGenDish2Lambda.functionArn,
+      description: 'Image Generator Dish2 Lambda ARN',
+    });
+
+    new cdk.CfnOutput(this, 'ImageGenDessertLambdaArn', {
+      value: imageGenDessertLambda.functionArn,
+      description: 'Image Generator Dessert Lambda ARN',
     });
   }
 }
