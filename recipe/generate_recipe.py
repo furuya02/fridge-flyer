@@ -184,9 +184,10 @@ def parse_recipe_markdown(md_text: str) -> dict[str, Any]:
     # お買い物まとめセクションを抽出
     shopping_summary: dict[str, Any] = {"items": [], "total": "", "note": ""}
 
-    # テーブル形式の買い物リストを抽出
+    # 形式1: テーブル形式の買い物リストを抽出（「お買い物まとめ」または「買い物まとめ」に対応）
+    # 2列または3列のテーブルに対応
     table_match = re.search(
-        r"## .*お買い物まとめ.*\n\n\|.+\|.+\|\n\|[-\s|]+\|\n((?:\|.+\|.+\|\n)+)",
+        r"## .*買い物まとめ.*\n\n\|.+\|\n\|[-\s|]+\|\n((?:\|.+\|\n)+)",
         md_text,
         re.DOTALL,
     )
@@ -196,28 +197,82 @@ def parse_recipe_markdown(md_text: str) -> dict[str, Any]:
             if len(cols) >= 2:
                 item_name = cols[0].replace("**", "")
                 price = cols[1].replace("**", "")
+                # 3列目がある場合はレシピ名として取得
+                recipe_name = cols[2].replace("**", "") if len(cols) >= 3 else ""
                 if "合計" in item_name.lower():
                     shopping_summary["total"] = price
                 else:
-                    shopping_summary["items"].append({"name": item_name, "price": price})
+                    item_data: dict[str, str] = {"name": item_name, "price": price}
+                    if recipe_name:
+                        item_data["recipe"] = recipe_name
+                    shopping_summary["items"].append(item_data)
+    else:
+        # 形式2: 各レシピの買い物リストから抽出
+        # **買い物リスト**: の後に続く行を抽出
+        for i, (pattern, label, is_dessert) in enumerate(patterns):
+            shop_pattern = rf"### (?:料理{i+1}|デザート)[::].+?\*\*買い物リスト\*\*[：:]?\s*\n((?:- .+\n?)+)"
+            shop_section = re.search(shop_pattern, md_text, re.DOTALL)
+            if shop_section:
+                for line in shop_section.group(1).strip().split("\n"):
+                    if line.startswith("- "):
+                        item_text = line[2:].strip()
+                        # 価格を抽出（例: "サニーレタス（イオン特売 128円／税抜）"）
+                        price_match = re.search(r"(\d[\d,]*円)", item_text)
+                        if price_match:
+                            price = price_match.group(1)
+                            # 商品名を整形
+                            name = re.sub(r"[（(].*?[）)]", "", item_text).strip()
+                            name = re.sub(r"\*\*", "", name)
+                            # 重複チェック
+                            if not any(item["name"] == name for item in shopping_summary["items"]):
+                                shopping_summary["items"].append({"name": name, "price": price})
 
-    # 注記を抽出
-    note_match = re.search(r"> ※(.+?)(?=\n\n|\Z)", md_text, re.DOTALL)
+        # 形式2: **買い物合計（税抜）: ...** を抽出
+        total_match = re.search(r"\*\*買い物合計[（(]税抜[）)][：:]\s*(.+?)\*\*", md_text)
+        if total_match:
+            shopping_summary["total"] = total_match.group(1).strip()
+
+    # 注記を抽出（「> ※」または「> 💡」形式に対応）
+    note_match = re.search(r"> [※💡].*?\*\*(.+?)\*\*[：:]\s*(.+?)(?=\n\n|\Z)", md_text, re.DOTALL)
     if note_match:
-        shopping_summary["note"] = note_match.group(1).strip()
+        shopping_summary["note"] = note_match.group(2).strip()
 
-    # 最後のメッセージを抽出
-    final_msg_match = re.search(r"\n\nたった\*\*(.+?)\*\*で.+", md_text)
+    # 最後のメッセージを抽出（様々な形式に対応）
+    final_msg_match = re.search(
+        r"\n\n(冷蔵庫の食材を.+?(?:仕上がります|ください)[！!]?)",
+        md_text,
+        re.DOTALL
+    )
     if final_msg_match:
-        shopping_summary["final_message"] = final_msg_match.group(0).strip()
+        shopping_summary["final_message"] = final_msg_match.group(1).strip()
 
     return {"recipes": recipes, "shopping_summary": shopping_summary}
+
+
+def load_description_json(filename: str) -> str:
+    """results/のJSONファイルからdescriptionフィールドを読み込む"""
+    json_path = RESULTS_DIR / filename
+    if json_path.exists():
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            return data.get("description", "")
+        except (json.JSONDecodeError, KeyError):
+            return ""
+    return ""
 
 
 def generate_html(recipe_data: dict[str, Any]) -> str:
     """レシピデータからHTMLを生成する"""
     recipes = recipe_data.get("recipes", [])
     shopping_summary = recipe_data.get("shopping_summary", {})
+
+    # JSONからdescriptionを読み込み、JavaScriptエスケープ
+    fridge_description = load_description_json("fridge_description.json")
+    flyer_description = load_description_json("flyer_description.json")
+
+    # JavaScriptの文字列リテラル用にエスケープ
+    fridge_desc_escaped = fridge_description.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+    flyer_desc_escaped = flyer_description.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
 
     # レシピカードのHTML生成
     recipe_cards = []
@@ -273,9 +328,20 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
     # お買い物まとめセクションの生成
     shopping_html = ""
     if shopping_summary.get("items") or shopping_summary.get("total"):
+        # 3列目（使用するレシピ）があるかチェック
+        has_recipe_col = any(item.get("recipe") for item in shopping_summary.get("items", []))
+
         items_rows = ""
         for item in shopping_summary.get("items", []):
-            items_rows += f"""              <tr>
+            if has_recipe_col:
+                items_rows += f"""              <tr>
+                <td>{item.get('name', '')}</td>
+                <td>{item.get('price', '')}</td>
+                <td>{item.get('recipe', '')}</td>
+              </tr>
+"""
+            else:
+                items_rows += f"""              <tr>
                 <td>{item.get('name', '')}</td>
                 <td>{item.get('price', '')}</td>
               </tr>
@@ -294,6 +360,23 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
             msg = shopping_summary.get("final_message", "").replace("**", "").replace("\n", "")
             final_msg = f'<p class="note" style="margin-top: 12px;">{msg}</p>'
 
+        # テーブルヘッダー（3列または2列）
+        if has_recipe_col:
+            table_header = """            <thead>
+              <tr>
+                <th>買い足し品</th>
+                <th>価格（税抜）</th>
+                <th>使用するレシピ</th>
+              </tr>
+            </thead>"""
+        else:
+            table_header = """            <thead>
+              <tr>
+                <th>買い足し品</th>
+                <th>価格（税抜）</th>
+              </tr>
+            </thead>"""
+
         shopping_html = f"""
       <!-- お買い物まとめ -->
       <section>
@@ -301,12 +384,7 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
         <div class="shopping-summary">
           <h3>チラシから買い足す商品</h3>
           <table>
-            <thead>
-              <tr>
-                <th>買い足し品</th>
-                <th>価格（税込）</th>
-              </tr>
-            </thead>
+{table_header}
             <tbody>
 {items_rows.rstrip()}
             </tbody>
@@ -410,6 +488,12 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
 
       .source-card .card-body {{
         padding: 16px 20px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }}
+
+      .source-card .card-body:hover {{
+        background: var(--primary-light);
       }}
 
       .source-card h3 {{
@@ -591,6 +675,100 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
         box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
       }}
 
+      .text-modal-overlay {{
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1001;
+        justify-content: center;
+        align-items: center;
+      }}
+
+      .text-modal-overlay.active {{
+        display: flex;
+      }}
+
+      .text-modal-content {{
+        background: #fff;
+        border-radius: 12px;
+        max-width: 800px;
+        max-height: 80vh;
+        width: 90%;
+        padding: 24px;
+        overflow-y: auto;
+        position: relative;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+      }}
+
+      .text-modal-content .close-btn {{
+        position: absolute;
+        top: 12px;
+        right: 16px;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: var(--text-light);
+      }}
+
+      .text-modal-content .close-btn:hover {{
+        color: var(--text);
+      }}
+
+      .text-modal-content h1 {{
+        font-size: 1.4rem;
+        color: var(--primary);
+        margin-bottom: 16px;
+      }}
+
+      .text-modal-content h2 {{
+        font-size: 1.1rem;
+        color: var(--text);
+        margin: 16px 0 8px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 4px;
+      }}
+
+      .text-modal-content h3 {{
+        font-size: 1rem;
+        color: var(--text);
+        margin: 12px 0 8px;
+      }}
+
+      .text-modal-content table {{
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 0.85rem;
+      }}
+
+      .text-modal-content th {{
+        text-align: left;
+        padding: 8px 10px;
+        background: var(--primary-light);
+        color: var(--primary);
+        font-weight: bold;
+      }}
+
+      .text-modal-content td {{
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+      }}
+
+      .text-modal-content p {{
+        margin: 8px 0;
+        line-height: 1.6;
+        font-size: 0.9rem;
+      }}
+
+      .text-modal-content hr {{
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 16px 0;
+      }}
+
       .shopping-summary {{
         background: var(--card-bg);
         border-radius: 12px;
@@ -684,14 +862,14 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
         <div class="source-grid">
           <div class="source-card">
             <img src="../fridge.jpg" alt="冷蔵庫の中身" />
-            <div class="card-body">
+            <div class="card-body" data-type="fridge">
               <h3>冷蔵庫の中身</h3>
               <p>冷蔵庫の食材を分析しました</p>
             </div>
           </div>
           <div class="source-card">
             <img src="../flyer.jpg" alt="チラシ" />
-            <div class="card-body">
+            <div class="card-body" data-type="flyer">
               <h3>スーパーのチラシ</h3>
               <p>チラシの特売品を分析しました</p>
             </div>
@@ -720,7 +898,16 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
       <img id="modal-img" src="" alt="" />
     </div>
 
+    <!-- Text Modal -->
+    <div class="text-modal-overlay" id="text-modal">
+      <div class="text-modal-content">
+        <span class="close-btn" onclick="document.getElementById('text-modal').classList.remove('active')">&times;</span>
+        <div id="text-modal-body"></div>
+      </div>
+    </div>
+
     <script>
+      // 画像モーダル
       document.querySelectorAll('.source-card img').forEach(function(img) {{
         img.addEventListener('click', function() {{
           var modal = document.getElementById('modal');
@@ -729,6 +916,102 @@ def generate_html(recipe_data: dict[str, Any]) -> str:
           modalImg.alt = this.alt;
           modal.classList.add('active');
         }});
+      }});
+
+      // Markdownの説明を埋め込み
+      var descriptions = {{
+        fridge: `{fridge_desc_escaped}`,
+        flyer: `{flyer_desc_escaped}`
+      }};
+
+      // 簡易Markdown→HTML変換
+      function markdownToHtml(md) {{
+        if (!md) return '<p>データがありません</p>';
+        var html = md;
+
+        // 見出し
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+        // テーブル
+        var lines = html.split('\\n');
+        var inTable = false;
+        var tableHtml = '';
+        var result = [];
+
+        for (var i = 0; i < lines.length; i++) {{
+          var line = lines[i];
+          if (line.match(/^\\|.+\\|$/)) {{
+            if (!inTable) {{
+              inTable = true;
+              tableHtml = '<table>';
+            }}
+            if (line.match(/^\\|[-:\\s|]+\\|$/)) {{
+              continue;
+            }}
+            var cells = line.split('|').filter(function(c) {{ return c.trim() !== ''; }});
+            var isHeader = i > 0 && lines[i - 1] && !lines[i - 1].match(/^\\|[-:\\s|]+\\|$/) && !lines[i + 1];
+            if (i === 0 || (i > 0 && !lines[i - 1].match(/^\\|.+\\|$/))) {{
+              tableHtml += '<thead><tr>';
+              cells.forEach(function(c) {{ tableHtml += '<th>' + c.trim() + '</th>'; }});
+              tableHtml += '</tr></thead><tbody>';
+            }} else {{
+              tableHtml += '<tr>';
+              cells.forEach(function(c) {{ tableHtml += '<td>' + c.trim() + '</td>'; }});
+              tableHtml += '</tr>';
+            }}
+          }} else {{
+            if (inTable) {{
+              tableHtml += '</tbody></table>';
+              result.push(tableHtml);
+              tableHtml = '';
+              inTable = false;
+            }}
+            result.push(line);
+          }}
+        }}
+        if (inTable) {{
+          tableHtml += '</tbody></table>';
+          result.push(tableHtml);
+        }}
+        html = result.join('\\n');
+
+        // 太字
+        html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+
+        // 水平線
+        html = html.replace(/^---$/gm, '<hr>');
+
+        // 段落
+        html = html.replace(/\\n\\n/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+        html = html.replace(/<p><(h[123]|table|hr)/g, '<$1');
+        html = html.replace(/<\\/(h[123]|table)><\\/p>/g, '</$1>');
+        html = html.replace(/<hr><\\/p>/g, '<hr>');
+        html = html.replace(/<p><\\/p>/g, '');
+
+        return html;
+      }}
+
+      // テキストモーダル
+      document.querySelectorAll('.source-card .card-body').forEach(function(body) {{
+        body.addEventListener('click', function(e) {{
+          e.stopPropagation();
+          var type = this.getAttribute('data-type');
+          var md = descriptions[type] || '';
+          var textModal = document.getElementById('text-modal');
+          var textBody = document.getElementById('text-modal-body');
+          textBody.innerHTML = markdownToHtml(md);
+          textModal.classList.add('active');
+        }});
+      }});
+
+      // テキストモーダルの背景クリックで閉じる
+      document.getElementById('text-modal').addEventListener('click', function(e) {{
+        if (e.target === this) {{
+          this.classList.remove('active');
+        }}
       }});
     </script>
 
