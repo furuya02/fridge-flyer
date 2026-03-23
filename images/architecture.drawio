@@ -1,0 +1,123 @@
+<mxfile host="65bd71144e">
+    <diagram name="Architecture" id="architecture">
+        <mxGraphModel dx="1259" dy="742" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="s3_input_group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="470" y="30" width="290" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_input_title" value="S3 Bucket" style="text;html=1;align=left;verticalAlign=top;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="42.5" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_flyer" value="flyer.jpg (supermarket flyer)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="72.5" width="250" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_fridge" value="fridge.jpg (refrigerator contents)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="97.5" width="250" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="s3_input_group" target="bedrock_group" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="bedrock_group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;arcSize=5;" parent="1" vertex="1">
+                    <mxGeometry x="100" y="170" width="1030" height="230" as="geometry"/>
+                </mxCell>
+                <mxCell id="bedrock_title" value="Bedrock Flow" style="text;html=1;align=left;verticalAlign=top;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="180" width="200" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="input_node" value="Input&#xa;Node" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="150" y="265" width="100" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="flyer_processor" value="FlyerProcessor&#xa;(Lambda)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="225" width="150" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="fridge_processor" value="FridgeProcessor&#xa;(Lambda)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="300" width="150" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_input_flyer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="input_node" target="flyer_processor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_input_fridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="input_node" target="fridge_processor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="recipe_prompt" value="RecipePrompt&#xa;(Claude)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="450" y="250" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_flyer_recipe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="flyer_processor" target="recipe_prompt" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_fridge_recipe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="fridge_processor" target="recipe_prompt" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="imagegen_dish2" value="ImageGenDish2&#xa;(Lambda)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="190" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="imagegen_dessert" value="ImageGenDessert&#xa;(Lambda)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="325" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_recipe_dish1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="recipe_prompt" target="imagegen_dish1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_recipe_dish2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" target="imagegen_dish2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="600" y="280" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="arrow_recipe_dessert" style="edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="recipe_prompt" target="imagegen_dessert" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="merge_node" value="MergeNode&#xa;(Prompt)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="830" y="255" width="150" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_dish1_merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="imagegen_dish1" target="merge_node" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_dish2_merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="imagegen_dish2" target="merge_node" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_dessert_merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="imagegen_dessert" target="merge_node" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="output_node" value="Output&#xa;Node" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1010" y="255" width="100" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow_merge_output" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" parent="1" source="merge_node" target="output_node" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="arrow2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="bedrock_group" target="s3_output_group" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_output_group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;arcSize=8;" parent="1" vertex="1">
+                    <mxGeometry x="470" y="450" width="290" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_output_title" value="S3 Bucket (results/)" style="text;html=1;align=left;verticalAlign=top;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="462" width="250" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_out1" value="flyer_description.json" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="492" width="250" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_out2" value="fridge_description.json" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="512" width="250" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_out3" value="recipe_dish1.png" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="532" width="250" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_out4" value="recipe_dish2.png" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="552" width="250" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3_out5" value="recipe_dessert.png" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="572" width="250" height="18" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;" edge="1" parent="1" source="recipe_prompt" target="imagegen_dish1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="600" y="280" as="sourcePoint"/>
+                        <mxPoint x="705" y="240" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="imagegen_dish1" value="ImageGenDish1&#xa;(Lambda)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="255" width="150" height="50" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
