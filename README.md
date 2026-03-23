@@ -2,30 +2,36 @@
 
 [日本語](README.ja.md)
 
-A serverless application that automatically extracts product information from retail flyer images using Amazon Bedrock Flows and Claude's vision capabilities.
+A serverless application that suggests recipes using AI by analyzing refrigerator contents and supermarket flyer images.
 
 ## Overview
 
-`FridgeFlyer` processes retail flyer images stored in Amazon S3 and extracts detailed product information (name, unit, price) using Claude Opus 4.6's image recognition through Amazon Bedrock Flows. The extracted data is saved as JSON for further processing.
+`FridgeFlyer` uses Amazon Bedrock Flows and Claude Opus 4.6's image recognition to:
+
+1. **Analyze refrigerator contents** - Automatically recognize ingredients from refrigerator photos
+2. **Extract sale items from flyers** - Extract product information from supermarket flyers
+3. **Suggest recipes** - Generate 3 recipes combining refrigerator ingredients and sale items
+4. **Generate recipe images** - Create completion images of dishes using Nova Canvas
+5. **Output as HTML** - Automatically generate easy-to-read recipe pages
 
 ## Features
 
-- **AI-Powered Image Analysis**: Uses Claude Opus 4.6 (global inference) for accurate product extraction
-- **Automated Workflow**: Bedrock Flows orchestrates the entire processing pipeline
-- **Comprehensive Extraction**: Extracts product name, unit, tax-inclusive and tax-exclusive prices
+- **AI Image Analysis**: High-precision ingredient and product extraction using Claude Opus 4.6
+- **Recipe Generation**: Recipe suggestions that maximize refrigerator ingredients with minimal additional purchases
+- **Image Generation**: Dish completion images using Nova Canvas
+- **HTML Output**: Automatic generation of responsive recipe pages
 - **Infrastructure as Code**: Deploy with AWS CDK (TypeScript)
-- **Serverless Architecture**: Built on Lambda and Bedrock Flows for scalability
+- **Serverless Architecture**: Scalable configuration using Lambda and Bedrock Flows
 
 ## Architecture
 
-
 ![](images/architectured.png)
-
 
 ## Prerequisites
 
 - AWS CLI configured with appropriate credentials
 - Node.js 18.x or later
+- Python 3.10 or later (with boto3 installed)
 - AWS CDK CLI (`npm install -g aws-cdk`)
 - Bedrock model access enabled for Claude in your AWS account
 
@@ -83,15 +89,27 @@ echo "Flow updated to version $VERSION"
 
 ## Usage
 
-### Basic Usage
+### Quick Start (Recommended)
 
-1. Upload images to S3:
-```bash
-aws s3 cp flyer.jpg s3://fridge-flyer-<your-account-id>/
-aws s3 cp fridge.jpg s3://fridge-flyer-<your-account-id>/
+You can easily generate recipes using the Python script.
+
+#### 1. Prepare Images
+
+Place the following images in the `recipe/` directory:
+- `flyer.jpg` - Supermarket flyer image
+- `fridge.jpg` - Refrigerator contents image
+
+#### 2. Configure the Script
+
+Update the constants in `recipe/generate_recipe.py` according to your environment:
+
+```python
+FLOW_ID = "<FlowId from CloudFormation output>"
+FLOW_ALIAS_ID = "<FlowAliasId from CloudFormation output>"
+BUCKET_NAME = "fridge-flyer-<your-account-id>"
 ```
 
-2. Get Flow ID and Alias ID:
+You can find the Flow ID and Alias ID with:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name FridgeFlyerStack \
@@ -99,7 +117,39 @@ aws cloudformation describe-stacks \
   --output table
 ```
 
-3. Invoke the Bedrock Flow via CLI:
+#### 3. Run the Script
+
+```bash
+cd recipe
+python3 generate_recipe.py
+```
+
+#### 4. Check the Output
+
+When processing completes, the recipe page automatically opens in your browser.
+
+Generated files:
+| File | Description |
+|------|-------------|
+| `recipe/results/result.md` | Generated recipes (Markdown) |
+| `recipe/results/recipe_dish1.png` | Generated image for Dish 1 |
+| `recipe/results/recipe_dish2.png` | Generated image for Dish 2 |
+| `recipe/results/recipe_dessert.png` | Generated image for Dessert |
+| `recipe/output/index.html` | Recipe page (HTML) |
+
+### Using AWS CLI
+
+You can also invoke the Flow directly using AWS CLI without the Python script.
+
+#### 1. Upload Images to S3
+
+```bash
+aws s3 cp flyer.jpg s3://fridge-flyer-<your-account-id>/
+aws s3 cp fridge.jpg s3://fridge-flyer-<your-account-id>/
+```
+
+#### 2. Execute Bedrock Flow
+
 ```bash
 FLOW_ID="<FlowId from output>"
 ALIAS_ID="<FlowAliasId from output>"
@@ -111,12 +161,16 @@ aws bedrock-agent-runtime invoke-flow \
   --inputs '[{"content":{"document":"start"},"nodeName":"FlowInputNode","nodeOutputName":"document"}]'
 ```
 
-4. Check the results in the `results/` folder:
+#### 3. Check Results
+
 ```bash
 aws s3 ls s3://fridge-flyer-<your-account-id>/results/
+aws s3 sync s3://fridge-flyer-<your-account-id>/results/ ./results/
 ```
 
-### Output Files
+## Output Files
+
+### Files Saved to S3
 
 | File | Description |
 |------|-------------|
@@ -126,9 +180,7 @@ aws s3 ls s3://fridge-flyer-<your-account-id>/results/
 | `results/recipe_dish2.png` | Generated image for Dish 2 |
 | `results/recipe_dessert.png` | Generated image for Dessert |
 
-### Output Format
-
-The extracted data is saved as JSON:
+### JSON Output Format
 
 ```json
 {
@@ -147,7 +199,9 @@ Edit `cdk/lib/fridge-flyer-stack.ts` to customize:
 |-----------|-------------|---------|
 | `SOURCE_KEY` | Input image filename | `flyer.jpg` |
 | `MODEL_ID` | Claude model to use | `global.anthropic.claude-opus-4-6-v1` |
+| `IMAGE_MODEL_ID` | Image generation model | `amazon.nova-canvas-v1:0` |
 | `bucketName` | S3 bucket name pattern | `fridge-flyer-${ACCOUNT_ID}` |
+| `temperature` | Recipe generation diversity | `0.9` |
 
 ## Project Structure
 
@@ -164,6 +218,14 @@ fridge-flyer/
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── cdk.json
+├── recipe/
+│   ├── generate_recipe.py            # Recipe generation script
+│   ├── flyer.jpg                     # Flyer image (sample)
+│   ├── fridge.jpg                    # Refrigerator image (sample)
+│   ├── results/                      # Generation results
+│   └── output/                       # HTML output
+├── images/
+│   └── architectured.png             # Architecture diagram
 ├── README.md
 ├── README.ja.md
 └── LICENSE
@@ -171,10 +233,13 @@ fridge-flyer/
 
 ## Requirements
 
-- Python 3.12 (Lambda runtime)
+- Python 3.10 or later (boto3)
 - Node.js 18.x+
 - AWS CDK 2.x
 - AWS Account with Bedrock access
+  - Claude Opus 4.6 (global inference)
+  - Claude 3 Haiku
+  - Nova Canvas
 
 ## License
 

@@ -2,29 +2,36 @@
 
 [English](README.md)
 
-Amazon Bedrock FlowsとClaudeの画像認識機能を使用して、小売店のチラシ画像から商品情報を自動抽出するサーバーレスアプリケーション。
+冷蔵庫の中身とスーパーのチラシ画像からAIがレシピを提案するサーバーレスアプリケーション。
 
 ## 概要
 
-`FridgeFlyer`は、Amazon S3に保存されたチラシ画像を処理し、Amazon Bedrock Flowsを通じてClaude Opus 4.6の画像認識機能を使用して商品情報（商品名、単位、価格）を抽出します。抽出されたデータはJSONとして保存され、後続の処理に利用できます。
+`FridgeFlyer`は、Amazon Bedrock FlowsとClaude Opus 4.6の画像認識機能を活用して：
+
+1. **冷蔵庫の中身を分析** - 冷蔵庫の写真から食材を自動認識
+2. **チラシの特売品を抽出** - スーパーのチラシから商品情報を抽出
+3. **レシピを提案** - 冷蔵庫の食材と特売品を組み合わせた3品のレシピを生成
+4. **レシピ画像を生成** - Nova Canvasで料理の完成イメージを生成
+5. **HTMLで出力** - 見やすいレシピページを自動生成
 
 ## 機能
 
-- **AI画像分析**: Claude Opus 4.6（グローバル推論）による高精度な商品情報抽出
-- **自動化ワークフロー**: Bedrock Flowsが処理パイプライン全体をオーケストレーション
-- **包括的な抽出**: 商品名、単位、税込価格、税抜価格を抽出
+- **AI画像分析**: Claude Opus 4.6による高精度な食材・商品情報の抽出
+- **レシピ生成**: 冷蔵庫の食材を活かし、買い足しを最小限にしたレシピ提案
+- **画像生成**: Nova Canvasによる料理の完成イメージ生成
+- **HTML出力**: レスポンシブなレシピページの自動生成
 - **Infrastructure as Code**: AWS CDK（TypeScript）でデプロイ
-- **サーバーレスアーキテクチャ**: LambdaとBedrock Flowsによるスケーラブルな構成
+- **サーバーレス**: LambdaとBedrock Flowsによるスケーラブルな構成
 
 ## アーキテクチャ
 
 ![](images/architectured.png)
 
-
 ## 前提条件
 
 - 適切な認証情報で設定済みのAWS CLI
 - Node.js 18.x以上
+- Python 3.10以上（boto3がインストール済み）
 - AWS CDK CLI (`npm install -g aws-cdk`)
 - AWSアカウントでBedrockのClaudeモデルアクセスが有効化済み
 
@@ -82,15 +89,27 @@ echo "Flow updated to version $VERSION"
 
 ## 使用方法
 
-### 基本的な使用方法
+### クイックスタート（推奨）
 
-1. 画像をS3にアップロード:
-```bash
-aws s3 cp flyer.jpg s3://fridge-flyer-<your-account-id>/
-aws s3 cp fridge.jpg s3://fridge-flyer-<your-account-id>/
+Pythonスクリプトを使用して、簡単にレシピを生成できます。
+
+#### 1. 画像を準備
+
+`recipe/`ディレクトリに以下の画像を配置：
+- `flyer.jpg` - スーパーのチラシ画像
+- `fridge.jpg` - 冷蔵庫の中身の画像
+
+#### 2. スクリプトの設定
+
+`recipe/generate_recipe.py`の定数を環境に合わせて更新：
+
+```python
+FLOW_ID = "<CloudFormation出力のFlowId>"
+FLOW_ALIAS_ID = "<CloudFormation出力のFlowAliasId>"
+BUCKET_NAME = "fridge-flyer-<your-account-id>"
 ```
 
-2. Flow IDとAlias IDを取得:
+Flow IDとAlias IDは以下で確認できます：
 ```bash
 aws cloudformation describe-stacks \
   --stack-name FridgeFlyerStack \
@@ -98,7 +117,39 @@ aws cloudformation describe-stacks \
   --output table
 ```
 
-3. CLIでBedrock Flowを実行:
+#### 3. スクリプトを実行
+
+```bash
+cd recipe
+python3 generate_recipe.py
+```
+
+#### 4. 出力を確認
+
+処理が完了すると、自動的にブラウザでレシピページが開きます。
+
+生成されるファイル：
+| ファイル | 説明 |
+|---------|------|
+| `recipe/results/result.md` | 生成されたレシピ（Markdown） |
+| `recipe/results/recipe_dish1.png` | 料理1の生成画像 |
+| `recipe/results/recipe_dish2.png` | 料理2の生成画像 |
+| `recipe/results/recipe_dessert.png` | デザートの生成画像 |
+| `recipe/output/index.html` | レシピページ（HTML） |
+
+### AWS CLIでの使用方法
+
+Pythonスクリプトを使わず、AWS CLIで直接Flowを呼び出すこともできます。
+
+#### 1. 画像をS3にアップロード
+
+```bash
+aws s3 cp flyer.jpg s3://fridge-flyer-<your-account-id>/
+aws s3 cp fridge.jpg s3://fridge-flyer-<your-account-id>/
+```
+
+#### 2. Bedrock Flowを実行
+
 ```bash
 FLOW_ID="<出力されたFlowId>"
 ALIAS_ID="<出力されたFlowAliasId>"
@@ -110,12 +161,16 @@ aws bedrock-agent-runtime invoke-flow \
   --inputs '[{"content":{"document":"start"},"nodeName":"FlowInputNode","nodeOutputName":"document"}]'
 ```
 
-4. `results/`フォルダで結果を確認:
+#### 3. 結果を確認
+
 ```bash
 aws s3 ls s3://fridge-flyer-<your-account-id>/results/
+aws s3 sync s3://fridge-flyer-<your-account-id>/results/ ./results/
 ```
 
-### 出力ファイル
+## 出力ファイル
+
+### S3に保存されるファイル
 
 | ファイル | 説明 |
 |---------|------|
@@ -125,9 +180,7 @@ aws s3 ls s3://fridge-flyer-<your-account-id>/results/
 | `results/recipe_dish2.png` | 料理2の生成画像 |
 | `results/recipe_dessert.png` | デザートの生成画像 |
 
-### 出力形式
-
-抽出されたデータはJSONとして保存されます:
+### JSON出力形式
 
 ```json
 {
@@ -140,13 +193,15 @@ aws s3 ls s3://fridge-flyer-<your-account-id>/results/
 
 ## 設定
 
-`cdk/lib/fridge-flyer-stack.ts`を編集してカスタマイズ:
+`cdk/lib/fridge-flyer-stack.ts`を編集してカスタマイズ：
 
 | パラメータ | 説明 | デフォルト値 |
 |-----------|------|-------------|
 | `SOURCE_KEY` | 入力画像ファイル名 | `flyer.jpg` |
 | `MODEL_ID` | 使用するClaudeモデル | `global.anthropic.claude-opus-4-6-v1` |
+| `IMAGE_MODEL_ID` | 画像生成モデル | `amazon.nova-canvas-v1:0` |
 | `bucketName` | S3バケット名パターン | `fridge-flyer-${ACCOUNT_ID}` |
+| `temperature` | レシピ生成の多様性 | `0.9` |
 
 ## プロジェクト構成
 
@@ -163,6 +218,14 @@ fridge-flyer/
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── cdk.json
+├── recipe/
+│   ├── generate_recipe.py            # レシピ生成スクリプト
+│   ├── flyer.jpg                     # チラシ画像（サンプル）
+│   ├── fridge.jpg                    # 冷蔵庫画像（サンプル）
+│   ├── results/                      # 生成結果
+│   └── output/                       # HTML出力
+├── images/
+│   └── architectured.png             # アーキテクチャ図
 ├── README.md
 ├── README.ja.md
 └── LICENSE
@@ -170,10 +233,13 @@ fridge-flyer/
 
 ## 必要要件
 
-- Python 3.12（Lambdaランタイム）
+- Python 3.10以上（boto3）
 - Node.js 18.x以上
 - AWS CDK 2.x
 - Bedrockアクセスが有効なAWSアカウント
+  - Claude Opus 4.6（グローバル推論）
+  - Claude 3 Haiku
+  - Nova Canvas
 
 ## ライセンス
 
