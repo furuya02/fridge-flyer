@@ -36,35 +36,17 @@ export class FridgeFlyerStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    // チラシ処理Lambda（flyer.jpg用）
-    const flyerProcessorLambda = new lambda.Function(this, 'FlyerProcessorLambda', {
-      functionName: 'fridge-flyer-flyer-processor',
+    // 画像処理Lambda（統合版 - ノード名から処理対象を判定）
+    const imageProcessorLambda = new lambda.Function(this, 'ImageProcessorLambda', {
+      functionName: 'fridge-flyer-image-processor',
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda/image-processor'),
       role: imageProcessorRole,
-      timeout: cdk.Duration.minutes(5),
+      timeout: cdk.Duration.minutes(10),  // Claude Opusの処理に時間がかかるため延長
       memorySize: 1024,
       environment: {
         SOURCE_BUCKET: bucket.bucketName,
-        SOURCE_KEY: 'flyer.jpg',
-        OUTPUT_BUCKET: bucket.bucketName,
-        MODEL_ID: 'global.anthropic.claude-opus-4-6-v1',
-      },
-    });
-
-    // 冷蔵庫処理Lambda（fridge.jpg用）
-    const fridgeProcessorLambda = new lambda.Function(this, 'FridgeProcessorLambda', {
-      functionName: 'fridge-flyer-fridge-processor',
-      runtime: lambda.Runtime.PYTHON_3_12,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('lambda/image-processor'),
-      role: imageProcessorRole,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      environment: {
-        SOURCE_BUCKET: bucket.bucketName,
-        SOURCE_KEY: 'fridge.jpg',
         OUTPUT_BUCKET: bucket.bucketName,
         MODEL_ID: 'global.anthropic.claude-opus-4-6-v1',
       },
@@ -90,9 +72,9 @@ export class FridgeFlyerStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    // 画像生成Lambda（料理1用）
-    const imageGenDish1Lambda = new lambda.Function(this, 'ImageGenDish1Lambda', {
-      functionName: 'fridge-flyer-image-gen-dish1',
+    // 画像生成Lambda（統合版 - パラメータでrecipe_indexを指定）
+    const imageGeneratorLambda = new lambda.Function(this, 'ImageGeneratorLambda', {
+      functionName: 'fridge-flyer-image-generator',
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
       code: lambda.Code.fromAsset('lambda/image-generator'),
@@ -101,41 +83,27 @@ export class FridgeFlyerStack extends cdk.Stack {
       memorySize: 1024,
       environment: {
         OUTPUT_BUCKET: bucket.bucketName,
-        RECIPE_INDEX: '1',
         IMAGE_MODEL_ID: 'amazon.nova-canvas-v1:0',
       },
     });
 
-    // 画像生成Lambda（料理2用）
-    const imageGenDish2Lambda = new lambda.Function(this, 'ImageGenDish2Lambda', {
-      functionName: 'fridge-flyer-image-gen-dish2',
-      runtime: lambda.Runtime.PYTHON_3_12,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset('lambda/image-generator'),
-      role: imageGeneratorRole,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      environment: {
-        OUTPUT_BUCKET: bucket.bucketName,
-        RECIPE_INDEX: '2',
-        IMAGE_MODEL_ID: 'amazon.nova-canvas-v1:0',
-      },
+    // マージノードLambda用のIAMロール（最小権限）
+    const mergeNodeRole = new iam.Role(this, 'MergeNodeRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+      ],
     });
 
-    // 画像生成Lambda（デザート用）
-    const imageGenDessertLambda = new lambda.Function(this, 'ImageGenDessertLambda', {
-      functionName: 'fridge-flyer-image-gen-dessert',
+    // マージノードLambda（並列処理の同期用）
+    const mergeNodeLambda = new lambda.Function(this, 'MergeNodeLambda', {
+      functionName: 'fridge-flyer-merge-node',
       runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
-      code: lambda.Code.fromAsset('lambda/image-generator'),
-      role: imageGeneratorRole,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      environment: {
-        OUTPUT_BUCKET: bucket.bucketName,
-        RECIPE_INDEX: '3',
-        IMAGE_MODEL_ID: 'amazon.nova-canvas-v1:0',
-      },
+      code: lambda.Code.fromAsset('lambda/merge-node'),
+      role: mergeNodeRole,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
     });
 
     // Bedrock Flow用のIAMロール
@@ -147,11 +115,9 @@ export class FridgeFlyerStack extends cdk.Stack {
     flowRole.addToPolicy(new iam.PolicyStatement({
       actions: ['lambda:InvokeFunction'],
       resources: [
-        flyerProcessorLambda.functionArn,
-        fridgeProcessorLambda.functionArn,
-        imageGenDish1Lambda.functionArn,
-        imageGenDish2Lambda.functionArn,
-        imageGenDessertLambda.functionArn,
+        imageProcessorLambda.functionArn,
+        imageGeneratorLambda.functionArn,
+        mergeNodeLambda.functionArn,
       ],
     }));
 
@@ -245,13 +211,13 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
-          // チラシ処理ノード
+          // チラシ処理ノード - 統合Lambda（ノード名から処理対象を判定）
           {
             name: 'FlyerProcessorNode',
             type: 'LambdaFunction',
             configuration: {
               lambdaFunction: {
-                lambdaArn: flyerProcessorLambda.functionArn,
+                lambdaArn: imageProcessorLambda.functionArn,
               },
             },
             inputs: [
@@ -268,13 +234,13 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
-          // 冷蔵庫処理ノード
+          // 冷蔵庫処理ノード - 統合Lambda（ノード名から処理対象を判定）
           {
             name: 'FridgeProcessorNode',
             type: 'LambdaFunction',
             configuration: {
               lambdaFunction: {
-                lambdaArn: fridgeProcessorLambda.functionArn,
+                lambdaArn: imageProcessorLambda.functionArn,
               },
             },
             inputs: [
@@ -339,13 +305,13 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
-          // 画像生成ノード（料理1）
+          // 画像生成ノード（料理1）- 統合Lambda（ノード名からrecipe_indexを判定）
           {
             name: 'ImageGenDish1Node',
             type: 'LambdaFunction',
             configuration: {
               lambdaFunction: {
-                lambdaArn: imageGenDish1Lambda.functionArn,
+                lambdaArn: imageGeneratorLambda.functionArn,
               },
             },
             inputs: [
@@ -362,13 +328,13 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
-          // 画像生成ノード（料理2）
+          // 画像生成ノード（料理2）- 統合Lambda（ノード名からrecipe_indexを判定）
           {
             name: 'ImageGenDish2Node',
             type: 'LambdaFunction',
             configuration: {
               lambdaFunction: {
-                lambdaArn: imageGenDish2Lambda.functionArn,
+                lambdaArn: imageGeneratorLambda.functionArn,
               },
             },
             inputs: [
@@ -385,13 +351,13 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
-          // 画像生成ノード（デザート）
+          // 画像生成ノード（デザート）- 統合Lambda（ノード名からrecipe_indexを判定）
           {
             name: 'ImageGenDessertNode',
             type: 'LambdaFunction',
             configuration: {
               lambdaFunction: {
-                lambdaArn: imageGenDessertLambda.functionArn,
+                lambdaArn: imageGeneratorLambda.functionArn,
               },
             },
             inputs: [
@@ -408,36 +374,14 @@ export class FridgeFlyerStack extends cdk.Stack {
               },
             ],
           },
-          // マージノード（Promptで入力を待ち合わせてレシピテキストのみ出力）
-          // 高速なHaikuモデルを使用（待機目的のため）
+          // マージノード（Lambda関数で入力を待ち合わせてレシピテキストのみ出力）
+          // LLMを使用せずにコスト削減・高速化
           {
             name: 'MergeNode',
-            type: 'Prompt',
+            type: 'LambdaFunction',
             configuration: {
-              prompt: {
-                sourceConfiguration: {
-                  inline: {
-                    modelId: 'anthropic.claude-3-haiku-20240307-v1:0',
-                    templateType: 'TEXT',
-                    inferenceConfiguration: {
-                      text: {
-                        maxTokens: 4096,
-                        temperature: 0,
-                      },
-                    },
-                    templateConfiguration: {
-                      text: {
-                        text: '以下のテキストをそのまま出力してください。変更や追加は一切しないでください。\n\n{{recipe_text}}',
-                        inputVariables: [
-                          { name: 'recipe_text' },
-                          { name: 'image1_path' },
-                          { name: 'image2_path' },
-                          { name: 'image3_path' },
-                        ],
-                      },
-                    },
-                  },
-                },
+              lambdaFunction: {
+                lambdaArn: mergeNodeLambda.functionArn,
               },
             },
             inputs: [
@@ -464,7 +408,7 @@ export class FridgeFlyerStack extends cdk.Stack {
             ],
             outputs: [
               {
-                name: 'modelCompletion',
+                name: 'functionResponse',
                 type: 'String',
               },
             ],
@@ -637,7 +581,7 @@ export class FridgeFlyerStack extends cdk.Stack {
             type: 'Data',
             configuration: {
               data: {
-                sourceOutput: 'modelCompletion',
+                sourceOutput: 'functionResponse',
                 targetInput: 'document',
               },
             },
@@ -683,29 +627,14 @@ export class FridgeFlyerStack extends cdk.Stack {
       description: 'Bedrock Flow Alias ID',
     });
 
-    new cdk.CfnOutput(this, 'FlyerProcessorLambdaArn', {
-      value: flyerProcessorLambda.functionArn,
-      description: 'Flyer Processor Lambda ARN',
+    new cdk.CfnOutput(this, 'ImageProcessorLambdaArn', {
+      value: imageProcessorLambda.functionArn,
+      description: 'Image Processor Lambda ARN (unified)',
     });
 
-    new cdk.CfnOutput(this, 'FridgeProcessorLambdaArn', {
-      value: fridgeProcessorLambda.functionArn,
-      description: 'Fridge Processor Lambda ARN',
-    });
-
-    new cdk.CfnOutput(this, 'ImageGenDish1LambdaArn', {
-      value: imageGenDish1Lambda.functionArn,
-      description: 'Image Generator Dish1 Lambda ARN',
-    });
-
-    new cdk.CfnOutput(this, 'ImageGenDish2LambdaArn', {
-      value: imageGenDish2Lambda.functionArn,
-      description: 'Image Generator Dish2 Lambda ARN',
-    });
-
-    new cdk.CfnOutput(this, 'ImageGenDessertLambdaArn', {
-      value: imageGenDessertLambda.functionArn,
-      description: 'Image Generator Dessert Lambda ARN',
+    new cdk.CfnOutput(this, 'ImageGeneratorLambdaArn', {
+      value: imageGeneratorLambda.functionArn,
+      description: 'Image Generator Lambda ARN (unified)',
     });
   }
 }
