@@ -26,6 +26,7 @@ A serverless application that suggests recipes using AI by analyzing refrigerato
 ## Architecture
 
 ![](images/bedrock-flow-architecture.png)
+![](images/006.png)
 
 ## Prerequisites
 
