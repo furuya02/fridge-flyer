@@ -7,10 +7,12 @@ import json
 import os
 import re
 import webbrowser
+import io
 import boto3
 from botocore.config import Config
 from pathlib import Path
 from typing import Any
+from PIL import Image
 
 # 定数
 FLOW_ID = "9MM6CG8EW8"
@@ -26,20 +28,100 @@ RESULTS_DIR = SCRIPT_DIR / "results"
 OUTPUT_DIR = SCRIPT_DIR / "output"
 
 
+def compress_image_if_needed(image_path: Path, max_size_mb: float = 3.5) -> bytes:
+    """
+    画像が指定サイズを超える場合は圧縮する
+
+    Bedrockの制限は5MBだが、Base64エンコードで約1.37倍になるため、
+    3.5MB以下に圧縮する（3.5 * 1.37 ≈ 4.8MB）
+
+    Args:
+        image_path: 画像ファイルのパス
+        max_size_mb: 最大サイズ（MB）
+
+    Returns:
+        圧縮後の画像データ（bytes）
+    """
+    max_size_bytes = int(max_size_mb * 1024 * 1024)
+
+    # 元のファイルサイズを確認
+    original_size = image_path.stat().st_size
+
+    if original_size <= max_size_bytes:
+        # 圧縮不要
+        return image_path.read_bytes()
+
+    print(f"    (画像を圧縮中: {original_size / 1024 / 1024:.2f}MB -> ", end="")
+
+    # Pillowで画像を開く
+    with Image.open(image_path) as img:
+        # RGBに変換（PNGなどのRGBA対応）
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        # 段階的に圧縮を試行
+        quality = 85
+        max_dimension = 2000
+
+        while quality >= 30:
+            # リサイズ
+            if max(img.size) > max_dimension:
+                ratio = max_dimension / max(img.size)
+                new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
+                resized_img = img.resize(new_size, Image.Resampling.LANCZOS)
+            else:
+                resized_img = img
+
+            # JPEG圧縮
+            buffer = io.BytesIO()
+            resized_img.save(buffer, format="JPEG", quality=quality, optimize=True)
+            compressed_data = buffer.getvalue()
+
+            if len(compressed_data) <= max_size_bytes:
+                print(f"{len(compressed_data) / 1024 / 1024:.2f}MB)")
+                return compressed_data
+
+            # さらに圧縮を試行
+            quality -= 10
+            max_dimension -= 200
+
+        # 最終手段：最低品質で圧縮
+        buffer = io.BytesIO()
+        ratio = 1000 / max(img.size)
+        new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
+        resized_img = img.resize(new_size, Image.Resampling.LANCZOS)
+        resized_img.save(buffer, format="JPEG", quality=30, optimize=True)
+        compressed_data = buffer.getvalue()
+        print(f"{len(compressed_data) / 1024 / 1024:.2f}MB)")
+        return compressed_data
+
+
 def upload_images_to_s3(s3_client: Any) -> None:
-    """画像をS3にアップロードする"""
+    """画像をS3にアップロードする（必要に応じて圧縮）"""
     print("画像をS3にアップロード中...")
 
     # flyer.jpg
     if FLYER_PATH.exists():
-        s3_client.upload_file(str(FLYER_PATH), BUCKET_NAME, "flyer.jpg")
+        image_data = compress_image_if_needed(FLYER_PATH)
+        s3_client.put_object(
+            Bucket=BUCKET_NAME,
+            Key="flyer.jpg",
+            Body=image_data,
+            ContentType="image/jpeg"
+        )
         print(f"  - {FLYER_PATH.name} -> s3://{BUCKET_NAME}/flyer.jpg")
     else:
         print(f"  - 警告: {FLYER_PATH} が見つかりません")
 
     # fridge.jpg
     if FRIDGE_PATH.exists():
-        s3_client.upload_file(str(FRIDGE_PATH), BUCKET_NAME, "fridge.jpg")
+        image_data = compress_image_if_needed(FRIDGE_PATH)
+        s3_client.put_object(
+            Bucket=BUCKET_NAME,
+            Key="fridge.jpg",
+            Body=image_data,
+            ContentType="image/jpeg"
+        )
         print(f"  - {FRIDGE_PATH.name} -> s3://{BUCKET_NAME}/fridge.jpg")
     else:
         print(f"  - 警告: {FRIDGE_PATH} が見つかりません")
