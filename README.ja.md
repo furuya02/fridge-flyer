@@ -26,6 +26,7 @@
 ## アーキテクチャ
 
 ![](images/bedrock-flow-architecture.png)
+![](images/006.png)
 
 ## 前提条件
 
