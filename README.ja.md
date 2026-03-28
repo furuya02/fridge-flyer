@@ -59,6 +59,8 @@ cdk deploy
 
 CDKを再デプロイした後は、新しいFlowバージョンを作成してAliasを更新する必要があります：
 
+**cdk/update_alias.sh**
+
 ```bash
 # Flow IDを取得
 FLOW_ID=$(aws cloudformation describe-stacks \

@@ -7,7 +7,15 @@ import os
 import re
 import base64
 import boto3
+from botocore.config import Config
 from typing import Any
+
+# boto3のタイムアウト設定
+BEDROCK_CONFIG = Config(
+    read_timeout=300,  # 5分
+    connect_timeout=60,
+    retries={'max_attempts': 2}
+)
 
 
 def extract_recipe_by_index(recipe_text: str, recipe_index: int) -> dict[str, str]:
@@ -62,6 +70,67 @@ def generate_image_prompt(recipe_name: str, recipe_description: str) -> str:
     return prompt[:900]
 
 
+def parse_flow_inputs(event: dict[str, Any]) -> dict[str, str]:
+    """
+    Bedrock Flowからの入力をパースする
+
+    Bedrock Flow Lambdaノードの入力形式:
+    {
+        "node": {
+            "name": "...",
+            "inputs": [
+                {"name": "codeHookInput", "value": "...", "type": "STRING"},
+                {"name": "recipe_index", "value": "1", "type": "STRING"}
+            ]
+        },
+        "flow": {...},
+        "messageVersion": "1.0"
+    }
+
+    Args:
+        event: Bedrock Flowからの入力
+
+    Returns:
+        入力値の辞書
+    """
+    inputs_dict: dict[str, str] = {}
+
+    if isinstance(event, dict) and "node" in event:
+        node_inputs = event.get("node", {}).get("inputs", [])
+        for input_item in node_inputs:
+            name = input_item.get("name", "")
+            value = input_item.get("value", "")
+            inputs_dict[name] = value
+    elif isinstance(event, dict):
+        # フォールバック: 直接キーとして渡される場合
+        inputs_dict = {k: str(v) for k, v in event.items()}
+
+    return inputs_dict
+
+
+def get_recipe_index_from_node_name(event: dict[str, Any]) -> int:
+    """
+    ノード名からrecipe_indexを判定する
+
+    Args:
+        event: Bedrock Flowからの入力
+
+    Returns:
+        recipe_index (1, 2, or 3)
+    """
+    node_name = event.get("node", {}).get("name", "")
+
+    if "Dish1" in node_name:
+        return 1
+    elif "Dish2" in node_name:
+        return 2
+    elif "Dessert" in node_name:
+        return 3
+    else:
+        # フォールバック: 環境変数から取得
+        return int(os.environ.get("RECIPE_INDEX", "1"))
+
+
 def handler(event: dict[str, Any], context: Any) -> str:
     """
     Bedrock Flowから呼び出され、レシピの画像を生成してS3に保存する
@@ -76,18 +145,22 @@ def handler(event: dict[str, Any], context: Any) -> str:
     print(f"Received event: {json.dumps(event)}")
 
     s3_client = boto3.client("s3")
-    bedrock_runtime = boto3.client("bedrock-runtime")
+    bedrock_runtime = boto3.client("bedrock-runtime", config=BEDROCK_CONFIG)
 
     # 環境変数から設定を取得
     output_bucket = os.environ["OUTPUT_BUCKET"]
-    recipe_index = int(os.environ.get("RECIPE_INDEX", "1"))
     image_model_id = os.environ.get("IMAGE_MODEL_ID", "amazon.nova-canvas-v1:0")
 
-    # Bedrock Flowからの入力を取得
-    # Lambda nodeへの入力はcodeHookInputとして渡される
-    recipe_text = event
-    if isinstance(event, dict):
-        recipe_text = event.get("codeHookInput", event.get("inputText", str(event)))
+    # Bedrock Flowからの入力をパース
+    inputs = parse_flow_inputs(event)
+
+    # レシピテキストを取得
+    recipe_text = inputs.get("codeHookInput", "")
+    if not recipe_text and isinstance(event, str):
+        recipe_text = event
+
+    # ノード名からrecipe_indexを判定
+    recipe_index = get_recipe_index_from_node_name(event)
 
     print(f"Processing recipe index: {recipe_index}")
     print(f"Recipe text length: {len(str(recipe_text))}")

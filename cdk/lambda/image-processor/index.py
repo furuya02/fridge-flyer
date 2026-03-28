@@ -5,7 +5,15 @@ S3から画像を取得し、Bedrockで画像の内容を分析する
 import json
 import os
 import boto3
+from botocore.config import Config
 from typing import Any
+
+# boto3のタイムアウト設定（Claude Opusは処理に時間がかかるため延長）
+BEDROCK_CONFIG = Config(
+    read_timeout=600,  # 10分
+    connect_timeout=60,
+    retries={'max_attempts': 2}
+)
 
 
 def get_image_media_type(key: str) -> str:
@@ -65,12 +73,42 @@ def get_prompt_for_image(key: str) -> str:
 ※一部だけでなく、必ずすべての商品を出力してください。"""
 
 
+def get_source_key_from_node_name(event: dict[str, Any]) -> str:
+    """
+    ノード名から処理対象のS3キーを判定する
+
+    Bedrock Flow Lambdaノードの入力形式:
+    {
+        "node": {
+            "name": "FridgeProcessorNode" or "FlyerProcessorNode",
+            ...
+        },
+        ...
+    }
+
+    Args:
+        event: Bedrock Flowからの入力
+
+    Returns:
+        source_key (fridge.jpg or flyer.jpg)
+    """
+    node_name = event.get("node", {}).get("name", "")
+
+    if "Fridge" in node_name:
+        return "fridge.jpg"
+    elif "Flyer" in node_name:
+        return "flyer.jpg"
+    else:
+        # フォールバック: 環境変数から取得
+        return os.environ.get("SOURCE_KEY", "fridge.jpg")
+
+
 def handler(event: dict[str, Any], context: Any) -> str:
     """
     Bedrock Flowから呼び出され、S3から画像を取得してLLMで分析する
 
     Args:
-        event: Bedrock Flowからの入力（無視、環境変数のSOURCE_KEYを使用）
+        event: Bedrock Flowからの入力
         context: Lambdaコンテキスト
 
     Returns:
@@ -79,13 +117,15 @@ def handler(event: dict[str, Any], context: Any) -> str:
     print(f"Received event: {json.dumps(event)}")
 
     s3_client = boto3.client("s3")
-    bedrock_runtime = boto3.client("bedrock-runtime")
+    bedrock_runtime = boto3.client("bedrock-runtime", config=BEDROCK_CONFIG)
 
     # 環境変数から設定を取得
     bucket = os.environ["SOURCE_BUCKET"]
-    key = os.environ["SOURCE_KEY"]
     output_bucket = os.environ["OUTPUT_BUCKET"]
     model_id = os.environ.get("MODEL_ID", "global.anthropic.claude-opus-4-6-v1")
+
+    # ノード名から処理対象を判定
+    key = get_source_key_from_node_name(event)
 
     print(f"Processing image: s3://{bucket}/{key}")
 

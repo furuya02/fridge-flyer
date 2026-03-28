@@ -59,6 +59,8 @@ cdk deploy
 
 After redeploying CDK, you need to create a new Flow version and update the Alias:
 
+**cdk/update_alias.sh**
+
 ```bash
 # Get Flow ID
 FLOW_ID=$(aws cloudformation describe-stacks \
@@ -86,6 +88,7 @@ aws bedrock-agent update-flow-alias \
 
 echo "Flow updated to version $VERSION"
 ```
+
 
 ## Usage
 
