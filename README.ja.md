@@ -25,7 +25,7 @@
 
 ## アーキテクチャ
 
-![](images/architectured.png)
+![](images/bedrock-flow-architecture.png)
 
 ## 前提条件
 
@@ -218,11 +218,11 @@ aws s3 sync s3://fridge-flyer-<your-account-id>/results/ ./results/
 
 | パラメータ | 説明 | デフォルト値 |
 |-----------|------|-------------|
-| `SOURCE_KEY` | 入力画像ファイル名 | `flyer.jpg` |
-| `MODEL_ID` | 使用するClaudeモデル | `global.anthropic.claude-opus-4-6-v1` |
+| `MODEL_ID` | 画像分析に使用するClaudeモデル | `global.anthropic.claude-opus-4-6-v1` |
 | `IMAGE_MODEL_ID` | 画像生成モデル | `amazon.nova-canvas-v1:0` |
 | `bucketName` | S3バケット名パターン | `fridge-flyer-${ACCOUNT_ID}` |
 | `temperature` | レシピ生成の多様性 | `0.9` |
+| `timeout` | Lambda関数のタイムアウト | ImageProcessor: 10分, ImageGenerator: 5分 |
 
 ## プロジェクト構成
 
@@ -232,21 +232,27 @@ fridge-flyer/
 │   ├── bin/cdk.ts                    # CDKアプリエントリポイント
 │   ├── lib/fridge-flyer-stack.ts     # メインスタック定義
 │   ├── lambda/
-│   │   ├── image-processor/
-│   │   │   └── index.py              # 画像分析Lambda（Claude）
-│   │   └── image-generator/
-│   │       └── index.py              # レシピ画像生成Lambda（Nova Canvas）
+│   │   ├── image-processor/          # 画像分析Lambda（Claude Opus）
+│   │   │   └── index.py              # チラシ・冷蔵庫画像の分析
+│   │   ├── image-generator/          # レシピ画像生成Lambda（Nova Canvas）
+│   │   │   └── index.py              # 料理画像の生成
+│   │   └── merge-node/               # マージノードLambda
+│   │       └── index.py              # 並列処理の同期（LLM不使用）
+│   ├── update_alias.sh               # Flow Alias更新スクリプト
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── cdk.json
 ├── recipe/
 │   ├── generate_recipe.py            # レシピ生成スクリプト
-│   ├── flyer.jpg                     # チラシ画像（サンプル）
-│   ├── fridge.jpg                    # 冷蔵庫画像（サンプル）
+│   ├── flyer.jpg                     # チラシ画像（入力用）
+│   ├── fridge.jpg                    # 冷蔵庫画像（入力用）
+│   ├── flyer_001.jpg ~ flyer_009.jpg # サンプルチラシ画像
+│   ├── fridge_001.jpg ~ fridge_006.jpg # サンプル冷蔵庫画像
 │   ├── results/                      # 生成結果
 │   └── output/                       # HTML出力
 ├── images/
-│   └── architectured.png             # アーキテクチャ図
+│   ├── bedrock-flow-architecture.drawio  # アーキテクチャ図（編集可能）
+│   └── bedrock-flow-architecture.png     # アーキテクチャ図
 ├── README.md
 ├── README.ja.md
 └── LICENSE
@@ -254,13 +260,12 @@ fridge-flyer/
 
 ## 必要要件
 
-- Python 3.10以上（boto3）
+- Python 3.10以上（boto3, Pillow）
 - Node.js 18.x以上
 - AWS CDK 2.x
 - Bedrockアクセスが有効なAWSアカウント
-  - Claude Opus 4.6（グローバル推論）
-  - Claude 3 Haiku
-  - Nova Canvas
+  - Claude Opus 4.6（グローバル推論）- 画像分析・レシピ生成
+  - Nova Canvas - 料理画像生成
 
 ## ライセンス
 

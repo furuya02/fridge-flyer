@@ -25,7 +25,7 @@ A serverless application that suggests recipes using AI by analyzing refrigerato
 
 ## Architecture
 
-![](images/architectured.png)
+![](images/bedrock-flow-architecture.png)
 
 ## Prerequisites
 
@@ -220,11 +220,11 @@ Edit `cdk/lib/fridge-flyer-stack.ts` to customize:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `SOURCE_KEY` | Input image filename | `flyer.jpg` |
-| `MODEL_ID` | Claude model to use | `global.anthropic.claude-opus-4-6-v1` |
+| `MODEL_ID` | Claude model for image analysis | `global.anthropic.claude-opus-4-6-v1` |
 | `IMAGE_MODEL_ID` | Image generation model | `amazon.nova-canvas-v1:0` |
 | `bucketName` | S3 bucket name pattern | `fridge-flyer-${ACCOUNT_ID}` |
 | `temperature` | Recipe generation diversity | `0.9` |
+| `timeout` | Lambda function timeout | ImageProcessor: 10min, ImageGenerator: 5min |
 
 ## Project Structure
 
@@ -234,21 +234,27 @@ fridge-flyer/
 │   ├── bin/cdk.ts                    # CDK app entry point
 │   ├── lib/fridge-flyer-stack.ts     # Main stack definition
 │   ├── lambda/
-│   │   ├── image-processor/
-│   │   │   └── index.py              # Image analysis Lambda (Claude)
-│   │   └── image-generator/
-│   │       └── index.py              # Recipe image generation Lambda (Nova Canvas)
+│   │   ├── image-processor/          # Image analysis Lambda (Claude Opus)
+│   │   │   └── index.py              # Flyer & refrigerator image analysis
+│   │   ├── image-generator/          # Recipe image generation Lambda (Nova Canvas)
+│   │   │   └── index.py              # Dish image generation
+│   │   └── merge-node/               # Merge node Lambda
+│   │       └── index.py              # Parallel processing sync (no LLM)
+│   ├── update_alias.sh               # Flow Alias update script
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── cdk.json
 ├── recipe/
 │   ├── generate_recipe.py            # Recipe generation script
-│   ├── flyer.jpg                     # Flyer image (sample)
-│   ├── fridge.jpg                    # Refrigerator image (sample)
+│   ├── flyer.jpg                     # Flyer image (input)
+│   ├── fridge.jpg                    # Refrigerator image (input)
+│   ├── flyer_001.jpg ~ flyer_009.jpg # Sample flyer images
+│   ├── fridge_001.jpg ~ fridge_006.jpg # Sample refrigerator images
 │   ├── results/                      # Generation results
 │   └── output/                       # HTML output
 ├── images/
-│   └── architectured.png             # Architecture diagram
+│   ├── bedrock-flow-architecture.drawio  # Architecture diagram (editable)
+│   └── bedrock-flow-architecture.png     # Architecture diagram
 ├── README.md
 ├── README.ja.md
 └── LICENSE
@@ -256,13 +262,12 @@ fridge-flyer/
 
 ## Requirements
 
-- Python 3.10 or later (boto3)
+- Python 3.10 or later (boto3, Pillow)
 - Node.js 18.x+
 - AWS CDK 2.x
 - AWS Account with Bedrock access
-  - Claude Opus 4.6 (global inference)
-  - Claude 3 Haiku
-  - Nova Canvas
+  - Claude Opus 4.6 (global inference) - Image analysis & recipe generation
+  - Nova Canvas - Dish image generation
 
 ## License
 
